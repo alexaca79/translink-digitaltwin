@@ -10,6 +10,7 @@ export interface TransitRoute {
   longName: string;
   mode: TransitMode;
   color: string;
+  textColor: string;
   path: Coordinate[];
   paths?: Coordinate[][];
 }

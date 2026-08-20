@@ -23,6 +23,8 @@ interface ValidationResult {
   unknownScheduleRows: number;
   scheduleMetricText: string[];
   legendText: string;
+  legendRouteColors: Record<string, string>;
+  legendStateColors: Record<string, string>;
   lineStoryText?: string;
   lineStatusSegments?: number;
   threeDimensionalCanvasColors?: number;
@@ -129,6 +131,12 @@ async function validateViewport(
 
   const metrics = await page.evaluate(() => {
     const canvas = document.querySelector('canvas')?.getBoundingClientRect();
+    const legendRouteColors: Record<string, string> = {};
+    for (const item of document.querySelectorAll<HTMLElement>('.legend-route-item')) {
+      const label = item.textContent?.trim() ?? '';
+      const swatch = item.querySelector<HTMLElement>('.legend-line');
+      legendRouteColors[label] = swatch ? getComputedStyle(swatch).backgroundColor : '';
+    }
     return {
       viewport: { width: innerWidth, height: innerHeight },
       canvas: { width: canvas?.width ?? 0, height: canvas?.height ?? 0 },
@@ -142,6 +150,21 @@ async function validateViewport(
         .slice(1, 3)
         .map((element) => element.textContent ?? ''),
       legendText: document.querySelector('.map-legend')?.textContent ?? '',
+      legendRouteColors,
+      legendStateColors: {
+        'On time': getComputedStyle(
+          document.querySelector<HTMLElement>('.legend-dot.on-time')!
+        ).backgroundColor,
+        Delayed: getComputedStyle(
+          document.querySelector<HTMLElement>('.legend-dot.delayed')!
+        ).backgroundColor,
+        Early: getComputedStyle(
+          document.querySelector<HTMLElement>('.legend-dot.early')!
+        ).backgroundColor,
+        'Not reported': getComputedStyle(
+          document.querySelector<HTMLElement>('.legend-dot.unknown')!
+        ).backgroundColor,
+      },
     };
   });
   const mapScreenshot = await page.locator('.map-stage').screenshot();
@@ -166,6 +189,31 @@ async function validateViewport(
   );
   for (const label of ['Bus', 'Rail', 'SeaBus', 'Stop', 'Delayed', 'Not reported']) {
     assert(metrics.legendText.includes(label), `${name}: map legend is missing '${label}'.`);
+  }
+  const expectedRouteColors: Record<string, string> = {
+    Canada: 'rgb(0, 124, 159)',
+    Expo: 'rgb(0, 51, 160)',
+    Millennium: 'rgb(255, 205, 0)',
+    SeaBus: 'rgb(116, 102, 97)',
+    WCE: 'rgb(135, 24, 157)',
+  };
+  for (const [route, expectedColor] of Object.entries(expectedRouteColors)) {
+    assert(
+      metrics.legendRouteColors[route] === expectedColor,
+      `${name}: ${route} legend color is '${metrics.legendRouteColors[route]}' instead of '${expectedColor}'.`
+    );
+  }
+  const expectedStateColors: Record<string, string> = {
+    'On time': 'rgb(21, 21, 21)',
+    Delayed: 'rgb(215, 25, 32)',
+    Early: 'rgb(20, 125, 100)',
+    'Not reported': 'rgb(134, 133, 127)',
+  };
+  for (const [state, expectedColor] of Object.entries(expectedStateColors)) {
+    assert(
+      metrics.legendStateColors[state] === expectedColor,
+      `${name}: ${state} legend color is '${metrics.legendStateColors[state]}' instead of '${expectedColor}'.`
+    );
   }
   if (metrics.unknownScheduleRows === metrics.fleetRows) {
     assert(

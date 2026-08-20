@@ -12,6 +12,7 @@ import {
 } from 'maplibre-gl';
 import mapLibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 
+import { VEHICLE_STATE_COLORS } from '@/data/transitColors';
 import type {
   TransitRoute,
   TransitStop,
@@ -61,10 +62,7 @@ function emptyFeatureCollection<
 }
 
 function vehicleColor(state: VehicleTelemetry['state']) {
-  if (state === 'delayed') return '#d71920';
-  if (state === 'early') return '#147d64';
-  if (state === 'unknown') return '#86857f';
-  return '#151515';
+  return VEHICLE_STATE_COLORS[state];
 }
 
 function createMapStyle(): StyleSpecification {

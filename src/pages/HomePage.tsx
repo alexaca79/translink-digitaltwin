@@ -33,6 +33,7 @@ import { useStaticNetwork } from '@/hooks/useStaticNetwork';
 import { useTransitFeed } from '@/hooks/useTransitFeed';
 import type {
   TransitMode,
+  TransitRoute,
   VehicleState,
   VehicleTelemetry,
 } from '@/types/transit';
@@ -53,6 +54,12 @@ const modeIcons = {
   bus: BusFront,
   rail: TrainFront,
   ferry: Ship,
+};
+
+const routeRenderOrder: Record<TransitMode, number> = {
+  bus: 0,
+  ferry: 1,
+  rail: 2,
 };
 
 const lineStateOrder: VehicleState[] = [
@@ -104,15 +111,19 @@ function LineStory({
   summary,
   vehicles,
   selectedVehicle,
+  routeLabel,
   routeName,
   routeColor,
+  routeTextColor,
   onAddNote,
 }: {
   summary: LineOperationsSummary;
   vehicles: VehicleTelemetry[];
   selectedVehicle: VehicleTelemetry;
+  routeLabel: string;
   routeName: string;
   routeColor: string;
+  routeTextColor: string;
   onAddNote: () => void;
 }) {
   const ModeIcon = modeIcons[summary.mode];
@@ -151,10 +162,10 @@ function LineStory({
       <header>
         <div
           className="line-story-route"
-          style={{ backgroundColor: routeColor }}
+          style={{ backgroundColor: routeColor, color: routeTextColor }}
         >
           <ModeIcon size={13} aria-hidden="true" />
-          <strong>{summary.routeId}</strong>
+          <strong>{routeLabel}</strong>
         </div>
         <div className="line-story-title">
           <span>Current line snapshot</span>
@@ -260,10 +271,12 @@ function LineStory({
 function DelayBars({
   mode,
   routes,
+  routeLabels,
   maximumDelay,
 }: {
   mode: DelayComparisonMode;
   routes: RouteDelaySummary[];
+  routeLabels: ReadonlyMap<string, string>;
   maximumDelay: number;
 }) {
   const ModeIcon = modeIcons[mode];
@@ -278,9 +291,9 @@ function DelayBars({
           <div
             className="delay-route-row"
             key={`${mode}-${route.routeId}`}
-            aria-label={`${mode} route ${route.routeId}: ${route.averageDelayMinutes.toFixed(1)} minutes average delay across ${route.trackedVehicles} vehicles`}
+            aria-label={`${mode} route ${routeLabels.get(route.routeId) ?? route.routeId}: ${route.averageDelayMinutes.toFixed(1)} minutes average delay across ${route.trackedVehicles} vehicles`}
           >
-            <strong>{route.routeId}</strong>
+            <strong title={route.routeId}>{routeLabels.get(route.routeId) ?? route.routeId}</strong>
             <span className="delay-bar-track" aria-hidden="true">
               <span
                 className="delay-bar-fill"
@@ -297,7 +310,13 @@ function DelayBars({
   );
 }
 
-function DelayComparisonChart({ vehicles }: { vehicles: VehicleTelemetry[] }) {
+function DelayComparisonChart({
+  vehicles,
+  routes,
+}: {
+  vehicles: VehicleTelemetry[];
+  routes: TransitRoute[];
+}) {
   const busRoutes = useMemo(
     () => summarizeRouteDelays(vehicles, 'bus'),
     [vehicles]
@@ -310,6 +329,10 @@ function DelayComparisonChart({ vehicles }: { vehicles: VehicleTelemetry[] }) {
     1,
     ...busRoutes.map((route) => route.averageDelayMinutes),
     ...railRoutes.map((route) => route.averageDelayMinutes)
+  );
+  const routeLabels = useMemo(
+    () => new globalThis.Map(routes.map((route) => [route.id, route.shortName])),
+    [routes]
   );
 
   return (
@@ -325,10 +348,16 @@ function DelayComparisonChart({ vehicles }: { vehicles: VehicleTelemetry[] }) {
         <small>Avg positive delay</small>
       </header>
       <div className="delay-comparison-grid">
-        <DelayBars mode="bus" routes={busRoutes} maximumDelay={maximumDelay} />
+        <DelayBars
+          mode="bus"
+          routes={busRoutes}
+          routeLabels={routeLabels}
+          maximumDelay={maximumDelay}
+        />
         <DelayBars
           mode="rail"
           routes={railRoutes}
+          routeLabels={routeLabels}
           maximumDelay={maximumDelay}
         />
       </div>
@@ -355,10 +384,15 @@ export function HomePage() {
   const [search, setSearch] = useState('');
   const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
 
+  const fixedGuidewayRoutes = useMemo(
+    () => networkRoutes.filter((route) => route.mode !== 'bus'),
+    [networkRoutes]
+  );
+
   const visibleRoutes = useMemo(
-    () => networkRoutes.filter((route) =>
-      (modeFilter === 'all' || route.mode === modeFilter)
-    ),
+    () => networkRoutes
+      .filter((route) => modeFilter === 'all' || route.mode === modeFilter)
+      .sort((left, right) => routeRenderOrder[left.mode] - routeRenderOrder[right.mode]),
     [modeFilter, networkRoutes]
   );
   const visibleVehicles = useMemo(
@@ -436,7 +470,7 @@ export function HomePage() {
             <span className={`status-dot ${connectionState}`} />
             <div>
               <strong>{connectionState === 'connected' ? 'GTFS-RT live' : connectionState === 'degraded' ? 'Live feed degraded' : 'Simulation mode'}</strong>
-              <small>{liveConfigured ? 'TransLink GTFS-RT + static GTFS' : 'Deterministic open-data model'}</small>
+              <small>{liveConfigured ? 'Live buses + static rail network' : 'Deterministic open-data model'}</small>
             </div>
           </div>
           <div className="observation-time">
@@ -535,7 +569,21 @@ export function HomePage() {
                   <span className="legend-item"><span className="legend-dot early" aria-hidden="true" />Early</span>
                   <span className="legend-item"><span className="legend-dot unknown" aria-hidden="true" />Not reported</span>
                   <span className="legend-item"><span className="legend-dot stop" aria-hidden="true" />Stop</span>
-                  <span className="legend-item"><span className="legend-line" aria-hidden="true" />Route</span>
+                </div>
+              </div>
+              <div className="legend-section">
+                <span className="legend-section-label">Lines</span>
+                <div className="legend-items legend-route-items">
+                  {fixedGuidewayRoutes.map((route) => (
+                    <span className="legend-item legend-route-item" key={route.id}>
+                      <span
+                        className="legend-line"
+                        style={{ backgroundColor: route.color }}
+                        aria-hidden="true"
+                      />
+                      {route.shortName}
+                    </span>
+                  ))}
                 </div>
               </div>
               <p className="data-attribution">
@@ -551,8 +599,10 @@ export function HomePage() {
                 summary={selectedLineSummary}
                 vehicles={selectedLineVehicles}
                 selectedVehicle={selectedVehicle}
+                routeLabel={selectedRoute?.shortName ?? selectedVehicle.routeId}
                 routeName={selectedRoute?.longName ?? selectedVehicle.label}
                 routeColor={selectedRoute?.color ?? '#0073c6'}
+                routeTextColor={selectedRoute?.textColor ?? '#ffffff'}
                 onAddNote={() => setActivePanel('notes')}
               />
             )}
@@ -591,7 +641,7 @@ export function HomePage() {
 
             {activePanel === 'fleet' && (
               <div className="fleet-panel-body">
-                <DelayComparisonChart vehicles={snapshot.vehicles} />
+                <DelayComparisonChart vehicles={snapshot.vehicles} routes={networkRoutes} />
                 <label className="fleet-search"><Search size={15} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search route or vehicle" /></label>
                 <div className="fleet-list">
                   {visibleVehicles.map((vehicle) => (

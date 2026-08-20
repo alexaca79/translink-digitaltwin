@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as L from 'leaflet';
 import type { CircleMarker, LayerGroup, Map as LeafletMap } from 'leaflet';
 
+import { VEHICLE_STATE_COLORS } from '@/data/transitColors';
 import type { TransitRoute, TransitStop, VehicleTelemetry } from '@/types/transit';
 
 import 'leaflet/dist/leaflet.css';
@@ -19,10 +20,7 @@ const tileUrl =
   'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
 function vehicleColor(state: VehicleTelemetry['state']) {
-  if (state === 'delayed') return '#d71920';
-  if (state === 'early') return '#147d64';
-  if (state === 'unknown') return '#86857f';
-  return '#151515';
+  return VEHICLE_STATE_COLORS[state];
 }
 
 export function TransitMap({

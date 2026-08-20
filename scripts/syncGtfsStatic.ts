@@ -24,6 +24,14 @@ const webOutput = join(root, 'public', 'data', 'translink-network.json');
 
 type CsvRecord = Record<string, string>;
 
+const fixedGuidewayNames: Record<string, { shortName: string; longName: string }> = {
+  '13686': { shortName: 'Canada', longName: 'Canada Line' },
+  '30052': { shortName: 'Millennium', longName: 'Millennium Line' },
+  '30053': { shortName: 'Expo', longName: 'Expo Line' },
+  '6770': { shortName: 'WCE', longName: 'West Coast Express' },
+  '6771': { shortName: 'SeaBus', longName: 'SeaBus' },
+};
+
 function mode(routeType: string): TransitMode | null {
   if (routeType === '1' || routeType === '2') return 'rail';
   if (routeType === '4') return 'ferry';
@@ -36,6 +44,15 @@ function color(value: string, routeMode: TransitMode) {
   if (routeMode === 'rail') return '#0060a9';
   if (routeMode === 'ferry') return '#746661';
   return '#0073c6';
+}
+
+function textColor(value: string, background: string) {
+  if (/^[0-9a-fA-F]{6}$/.test(value)) return `#${value}`;
+  const red = Number.parseInt(background.slice(1, 3), 16);
+  const green = Number.parseInt(background.slice(3, 5), 16);
+  const blue = Number.parseInt(background.slice(5, 7), 16);
+  const luminance = (red * 299 + green * 587 + blue * 114) / 1000;
+  return luminance > 150 ? '#181817' : '#ffffff';
 }
 
 function compactPath(points: Coordinate[], maximumPoints = 420) {
@@ -136,12 +153,16 @@ async function main() {
       .filter((shape) => shape.path.length >= 2)
       .sort((left, right) => right.trips - left.trips || right.path.length - left.path.length);
     if (shapes.length === 0) return [];
+    const knownNames = fixedGuidewayNames[routeId];
+    const shortName = knownNames?.shortName || route.record.route_short_name || routeId;
+    const routeColor = color(route.record.route_color, route.mode);
     return [{
       id: routeId,
-      shortName: route.record.route_short_name || routeId,
-      longName: route.record.route_long_name || route.record.route_short_name || routeId,
+      shortName,
+      longName: knownNames?.longName || route.record.route_long_name || shortName,
       mode: route.mode,
-      color: color(route.record.route_color, route.mode),
+      color: routeColor,
+      textColor: textColor(route.record.route_text_color, routeColor),
       path: compactPath(shapes[0].path),
       paths: shapes.map((shape) => compactPath(shape.path, 240)),
     }];

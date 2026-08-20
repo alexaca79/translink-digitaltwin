@@ -12,6 +12,7 @@ export const TRANSLINK_ROUTES: TransitRoute[] = [
     longName: 'Expo Line',
     mode: 'rail',
     color: '#0033a0',
+    textColor: '#ffffff',
     path: [
       [-123.1119, 49.2857], [-123.1161, 49.2832], [-123.1093, 49.2795],
       [-123.1007, 49.2732], [-123.0695, 49.2626], [-123.0232, 49.2297],
@@ -26,6 +27,7 @@ export const TRANSLINK_ROUTES: TransitRoute[] = [
     longName: 'Millennium Line',
     mode: 'rail',
     color: '#ffcd00',
+    textColor: '#333333',
     path: [
       [-123.0788, 49.2658], [-123.0695, 49.2626], [-123.0455, 49.2589],
       [-123.0135, 49.2664], [-122.9982, 49.2662], [-122.9391, 49.2534],
@@ -39,6 +41,7 @@ export const TRANSLINK_ROUTES: TransitRoute[] = [
     longName: 'Canada Line',
     mode: 'rail',
     color: '#007c9f',
+    textColor: '#ffffff',
     path: [
       [-123.1119, 49.2857], [-123.1168, 49.2826], [-123.1219, 49.2745],
       [-123.1158, 49.2633], [-123.1155, 49.2492], [-123.1165, 49.2331],
@@ -52,6 +55,7 @@ export const TRANSLINK_ROUTES: TransitRoute[] = [
     longName: 'SeaBus',
     mode: 'ferry',
     color: '#746661',
+    textColor: '#ffffff',
     path: [
       [-123.1119, 49.2857], [-123.102, 49.2918], [-123.092, 49.2991],
       [-123.0827, 49.3101],
@@ -63,6 +67,7 @@ export const TRANSLINK_ROUTES: TransitRoute[] = [
     longName: 'Hastings St',
     mode: 'bus',
     color: '#008522',
+    textColor: '#ffffff',
     path: [
       [-123.1208, 49.2856], [-123.0997, 49.2811], [-123.0776, 49.281],
       [-123.0565, 49.281], [-123.023, 49.2812], [-122.9955, 49.2801],
