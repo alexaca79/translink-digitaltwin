@@ -1,7 +1,7 @@
 const SECONDS_PER_DAY = 24 * 60 * 60;
 const HALF_DAY_SECONDS = SECONDS_PER_DAY / 2;
-const torontoTimeFormatter = new Intl.DateTimeFormat('en-CA', {
-  timeZone: 'America/Toronto',
+const vancouverTimeFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'America/Vancouver',
   hour: '2-digit',
   minute: '2-digit',
   second: '2-digit',
@@ -14,10 +14,10 @@ export function parseGtfsTime(value: string) {
   return Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
 }
 
-function torontoSecondOfDay(epochSeconds: number) {
+function vancouverSecondOfDay(epochSeconds: number) {
   if (!Number.isFinite(epochSeconds) || epochSeconds <= 0) return null;
   const parts = Object.fromEntries(
-    torontoTimeFormatter
+    vancouverTimeFormatter
       .formatToParts(new Date(epochSeconds * 1000))
       .map((part) => [part.type, part.value])
   );
@@ -32,7 +32,7 @@ export function computeScheduleDeviation(
   predictedEpochSeconds: number,
   scheduledSeconds: number
 ) {
-  const predictedSeconds = torontoSecondOfDay(predictedEpochSeconds);
+  const predictedSeconds = vancouverSecondOfDay(predictedEpochSeconds);
   if (predictedSeconds == null || !Number.isFinite(scheduledSeconds) || scheduledSeconds < 0) {
     return null;
   }

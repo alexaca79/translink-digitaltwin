@@ -49,7 +49,7 @@ export function AuthPage() {
         <div className="w-full max-w-sm">
           <div className="rounded border border-black/20 bg-[#fbfbf9]/95 p-8 shadow-xl backdrop-blur-sm">
             <div className="mb-8 text-center">
-              <div className="mx-auto mb-5 grid h-14 w-14 place-items-center bg-[#d71920] text-lg font-bold text-white">TTC</div>
+              <div className="mx-auto mb-5 grid h-14 w-14 place-items-center bg-[#0073c6] text-lg font-bold text-white">TL</div>
               <h1 className="text-2xl font-bold text-gray-900">Transit digital twin</h1>
               <p className="mt-2 text-sm text-gray-500">
                 Sign in to the operations workspace.

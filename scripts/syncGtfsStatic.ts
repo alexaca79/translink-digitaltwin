@@ -16,26 +16,26 @@ import type {
 } from '../src/types/transit.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const sourceUrl = process.env.TTC_GTFS_STATIC_URL
-  ?? 'https://ckan0.cf.opendata.inter.prod-toronto.ca/dataset/b811ead4-6eaf-4adb-8408-d389fb5a069c/resource/c920e221-7a1c-488b-8c5b-6d8cd4e85eaf/download/Complete%20GTFS.zip';
-const licenseUrl = 'https://open.toronto.ca/open-data-licence/';
+const sourceUrl = process.env.TRANSLINK_GTFS_STATIC_URL
+  ?? 'https://gtfs-static.translink.ca/gtfs/google_transit.zip';
+const licenseUrl = 'https://www.translink.ca/about-us/doing-business-with-translink/app-developer-resources/gtfs/gtfs-data';
 const rawOutput = join(root, 'data', 'gtfs-static');
-const webOutput = join(root, 'public', 'data', 'ttc-network.json');
+const webOutput = join(root, 'public', 'data', 'translink-network.json');
 
 type CsvRecord = Record<string, string>;
 
 function mode(routeType: string): TransitMode | null {
-  if (routeType === '0') return 'streetcar';
-  if (routeType === '1') return 'subway';
-  if (routeType === '3') return 'bus';
+  if (routeType === '1' || routeType === '2') return 'rail';
+  if (routeType === '4') return 'ferry';
+  if (routeType === '3' || routeType === '715') return 'bus';
   return null;
 }
 
 function color(value: string, routeMode: TransitMode) {
   if (/^[0-9a-fA-F]{6}$/.test(value)) return `#${value}`;
-  if (routeMode === 'streetcar') return '#d71920';
-  if (routeMode === 'subway') return '#3f9f58';
-  return '#1b74bb';
+  if (routeMode === 'rail') return '#0060a9';
+  if (routeMode === 'ferry') return '#746661';
+  return '#0073c6';
 }
 
 function compactPath(points: Coordinate[], maximumPoints = 420) {
@@ -57,7 +57,7 @@ function records(buffer: Buffer) {
 }
 
 async function main() {
-  console.log(`Downloading TTC merged GTFS from ${sourceUrl}`);
+  console.log(`Downloading TransLink GTFS from ${sourceUrl}`);
   const response = await fetch(sourceUrl, { signal: AbortSignal.timeout(600_000) });
   if (!response.ok) throw new Error(`GTFS download failed (${response.status}): ${response.statusText}`);
   const archive = await unzipper.Open.buffer(Buffer.from(await response.arrayBuffer()));
@@ -93,10 +93,14 @@ async function main() {
     })
   );
   const shapeRoute = new Map<string, string>();
+  const shapeTrips = new Map<string, number>();
   const services = new Set<string>();
   for (const trip of tripRecords) {
     if (trip.shape_id && trip.route_id && !shapeRoute.has(trip.shape_id)) {
       shapeRoute.set(trip.shape_id, trip.route_id);
+    }
+    if (trip.shape_id) {
+      shapeTrips.set(trip.shape_id, (shapeTrips.get(trip.shape_id) ?? 0) + 1);
     }
     if (trip.service_id) services.add(trip.service_id);
   }
@@ -115,28 +119,31 @@ async function main() {
     shapePoints.set(point.shape_id, points);
   }
 
-  const longestShapeByRoute = new Map<string, Coordinate[]>();
+  const shapesByRoute = new Map<string, Array<{ path: Coordinate[]; trips: number }>>();
   for (const [shapeId, points] of shapePoints) {
     const routeId = shapeRoute.get(shapeId);
     if (!routeId || !routeById.has(routeId)) continue;
     const path = points
       .sort((left, right) => left.sequence - right.sequence)
       .map((point) => point.coordinate);
-    if (path.length > (longestShapeByRoute.get(routeId)?.length ?? 0)) {
-      longestShapeByRoute.set(routeId, path);
-    }
+    const shapes = shapesByRoute.get(routeId) ?? [];
+    shapes.push({ path, trips: shapeTrips.get(shapeId) ?? 0 });
+    shapesByRoute.set(routeId, shapes);
   }
 
   const routes: TransitRoute[] = [...routeById].flatMap(([routeId, route]) => {
-    const path = longestShapeByRoute.get(routeId);
-    if (!path || path.length < 2) return [];
+    const shapes = (shapesByRoute.get(routeId) ?? [])
+      .filter((shape) => shape.path.length >= 2)
+      .sort((left, right) => right.trips - left.trips || right.path.length - left.path.length);
+    if (shapes.length === 0) return [];
     return [{
       id: routeId,
       shortName: route.record.route_short_name || routeId,
       longName: route.record.route_long_name || route.record.route_short_name || routeId,
       mode: route.mode,
       color: color(route.record.route_color, route.mode),
-      path: compactPath(path),
+      path: compactPath(shapes[0].path),
+      paths: shapes.map((shape) => compactPath(shape.path, 240)),
     }];
   }).sort((left, right) => left.shortName.localeCompare(right.shortName, undefined, { numeric: true }));
 

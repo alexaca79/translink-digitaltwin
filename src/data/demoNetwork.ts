@@ -5,82 +5,78 @@ import type {
   VehicleTelemetry,
 } from '@/types/transit';
 
-export const TTC_ROUTES: TransitRoute[] = [
+export const TRANSLINK_ROUTES: TransitRoute[] = [
   {
-    id: '1',
-    shortName: '1',
-    longName: 'Yonge-University',
-    mode: 'subway',
-    color: '#f2c94c',
+    id: '30053',
+    shortName: 'Expo',
+    longName: 'Expo Line',
+    mode: 'rail',
+    color: '#0033a0',
     path: [
-      [-79.4154, 43.7808], [-79.4111, 43.7669], [-79.4071, 43.7546],
-      [-79.4042, 43.7443], [-79.4015, 43.733], [-79.3993, 43.7218],
-      [-79.3954, 43.7061], [-79.3932, 43.6879], [-79.3867, 43.6707],
-      [-79.379, 43.6548], [-79.3803, 43.6457], [-79.3909, 43.645],
-      [-79.402, 43.6509], [-79.4111, 43.6599], [-79.4151, 43.6663],
-      [-79.4197, 43.6771], [-79.424, 43.6938], [-79.4438, 43.7247],
-      [-79.4478, 43.7502],
+      [-123.1119, 49.2857], [-123.1161, 49.2832], [-123.1093, 49.2795],
+      [-123.1007, 49.2732], [-123.0695, 49.2626], [-123.0232, 49.2297],
+      [-123.0038, 49.2258], [-122.9588, 49.2124], [-122.9127, 49.2013],
+      [-122.8894, 49.2048], [-122.867, 49.1991], [-122.8476, 49.1895],
+      [-122.8448, 49.1828],
     ],
   },
   {
-    id: '2',
-    shortName: '2',
-    longName: 'Bloor-Danforth',
-    mode: 'subway',
-    color: '#3f9f58',
+    id: '30052',
+    shortName: 'Millennium',
+    longName: 'Millennium Line',
+    mode: 'rail',
+    color: '#ffcd00',
     path: [
-      [-79.535, 43.637], [-79.5101, 43.6454], [-79.4932, 43.6495],
-      [-79.4746, 43.6503], [-79.4521, 43.6536], [-79.4338, 43.6568],
-      [-79.4124, 43.6601], [-79.3983, 43.6632], [-79.3828, 43.6701],
-      [-79.3686, 43.6766], [-79.3467, 43.6802], [-79.3217, 43.6879],
-      [-79.3, 43.7023], [-79.2804, 43.7322],
+      [-123.0788, 49.2658], [-123.0695, 49.2626], [-123.0455, 49.2589],
+      [-123.0135, 49.2664], [-122.9982, 49.2662], [-122.9391, 49.2534],
+      [-122.897, 49.2485], [-122.8894, 49.2614], [-122.8452, 49.2772],
+      [-122.8282, 49.2797], [-122.8001, 49.2856], [-122.7917, 49.2855],
     ],
   },
   {
-    id: '501',
-    shortName: '501',
-    longName: 'Queen',
-    mode: 'streetcar',
-    color: '#d71920',
+    id: '13686',
+    shortName: 'Canada',
+    longName: 'Canada Line',
+    mode: 'rail',
+    color: '#007c9f',
     path: [
-      [-79.5441, 43.5916], [-79.5062, 43.615], [-79.4752, 43.6306],
-      [-79.447, 43.6386], [-79.4211, 43.6427], [-79.3986, 43.6486],
-      [-79.382, 43.6522], [-79.3645, 43.6587], [-79.3382, 43.6667],
-      [-79.3105, 43.6763], [-79.2803, 43.6804],
+      [-123.1119, 49.2857], [-123.1168, 49.2826], [-123.1219, 49.2745],
+      [-123.1158, 49.2633], [-123.1155, 49.2492], [-123.1165, 49.2331],
+      [-123.1177, 49.2098], [-123.1254, 49.1942], [-123.1366, 49.1747],
+      [-123.1364, 49.1681],
     ],
   },
   {
-    id: '504',
-    shortName: '504',
-    longName: 'King',
-    mode: 'streetcar',
-    color: '#e53935',
+    id: '6771',
+    shortName: 'SeaBus',
+    longName: 'SeaBus',
+    mode: 'ferry',
+    color: '#746661',
     path: [
-      [-79.4513, 43.6569], [-79.4331, 43.6508], [-79.4163, 43.6437],
-      [-79.4026, 43.6422], [-79.3871, 43.6457], [-79.3753, 43.6491],
-      [-79.3613, 43.6549], [-79.3501, 43.6634], [-79.3443, 43.6769],
+      [-123.1119, 49.2857], [-123.102, 49.2918], [-123.092, 49.2991],
+      [-123.0827, 49.3101],
     ],
   },
   {
-    id: '29',
-    shortName: '29',
-    longName: 'Dufferin',
+    id: '37807',
+    shortName: 'R5',
+    longName: 'Hastings St',
     mode: 'bus',
-    color: '#1b74bb',
+    color: '#008522',
     path: [
-      [-79.4263, 43.6293], [-79.4269, 43.6432], [-79.4292, 43.6569],
-      [-79.4318, 43.6701], [-79.4355, 43.6871], [-79.4375, 43.7004],
-      [-79.4397, 43.715], [-79.4407, 43.7314], [-79.445, 43.7495],
+      [-123.1208, 49.2856], [-123.0997, 49.2811], [-123.0776, 49.281],
+      [-123.0565, 49.281], [-123.023, 49.2812], [-122.9955, 49.2801],
+      [-122.954, 49.2787], [-122.9194, 49.2781],
     ],
   },
 ];
 
 const VEHICLES_PER_ROUTE: Record<string, number> = {
-  '1': 14,
-  '2': 12,
-  '501': 10,
-  '504': 9,
-  '29': 8,
+  '30053': 12,
+  '30052': 10,
+  '13686': 9,
+  '6771': 3,
+  '37807': 8,
 };
 
 function distance([longitudeA, latitudeA]: Coordinate, [longitudeB, latitudeB]: Coordinate) {
@@ -113,7 +109,7 @@ function pointAlongPath(path: Coordinate[], progress: number) {
 export function createSimulatedVehicles(observedAt: Date): VehicleTelemetry[] {
   const elapsedSeconds = observedAt.getTime() / 1000;
 
-  return TTC_ROUTES.flatMap((route, routeIndex) => {
+  return TRANSLINK_ROUTES.flatMap((route, routeIndex) => {
     const vehicleCount = VEHICLES_PER_ROUTE[route.id];
     return Array.from({ length: vehicleCount }, (_, vehicleIndex) => {
       const cycle = (elapsedSeconds / (680 + routeIndex * 65) + vehicleIndex / vehicleCount) % 2;
@@ -153,17 +149,17 @@ export function createSimulatedAlerts(observedAt: Date): ServiceAlert[] {
     {
       id: 'sim-alert-1',
       severity: 'warning',
-      title: 'Slower service through the King corridor',
-      description: 'Synthetic demonstration alert caused by modeled downtown congestion.',
-      routeIds: ['504'],
+      title: 'Slower service through the Broadway corridor',
+      description: 'Synthetic TransLink demonstration alert caused by modeled congestion.',
+      routeIds: ['37807'],
       updatedAt: observedAt.toISOString(),
     },
     {
       id: 'sim-alert-2',
       severity: 'info',
-      title: 'Line 1 headways under observation',
-      description: 'Synthetic demonstration alert for schedule-adherence monitoring.',
-      routeIds: ['1'],
+      title: 'Expo Line headways under observation',
+      description: 'Synthetic TransLink demonstration alert for schedule-adherence monitoring.',
+      routeIds: ['30053'],
       updatedAt: observedAt.toISOString(),
     },
   ];

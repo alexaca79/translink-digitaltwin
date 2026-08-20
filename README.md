@@ -1,322 +1,154 @@
 ---
-title: TTC Digital Twin
-description: Open-data TTC macro operations twin built with Fabric Real-Time Intelligence and Rayfin
-ms.date: 2026-08-19
+title: TransLink Digital Twin
+description: Metro Vancouver transit operations twin built with Microsoft Fabric, Rayfin, and Azure Container Apps
+ms.date: 2026-08-20
 ms.topic: overview
 ---
+
 ## Scope
 
-This workload is a macro operations and service twin for the Toronto Transit
-Commission. It combines Microsoft Fabric Real-Time Intelligence with a Rayfin
-Fabric App.
+The TransLink Digital Twin is a macro operations workspace for Metro Vancouver.
+It combines TransLink GTFS and GTFS-realtime data with Microsoft Fabric
+Real-Time Intelligence and a Rayfin Fabric App.
 
-![Toronto Transit Digital Twin operations control dashboard showing a 3D
-streetcar route map and live service metrics](docs/images/ttc-digital-twin-operations-control.png)
+![TransLink operations dashboard showing the Metro Vancouver network](docs/images/translink-digital-twin-operations-control.png)
 
-To deploy it, start with the
-[deployment quickstart](DEPLOYMENT-QUICKSTART.md). For operations, rollback,
-and recovery, read [DEPLOYMENT.md](DEPLOYMENT.md).
-
-It models routes, stops, trips, live surface vehicles, schedule deviation, and
-service alerts. It does not claim to model asset health, internal facilities,
-tunnel geometry, track condition, signaling, or maintenance telemetry because
-those datasets are not available as TTC open data.
-
-> [!IMPORTANT]
-> TTC BusTime GTFS-realtime currently covers buses and streetcars. The open-data
-> request for subway and LRT real-time vehicle data remains backlogged. Subway
-> routes and stops appear from static GTFS, but the app never fabricates live
-> subway positions.
+The application models routes, stops, trips, current vehicles, schedule
+adherence, and service alerts. It includes buses, SkyTrain, West Coast Express,
+and SeaBus based on the modes present in TransLink's static GTFS feed.
 
 ## Architecture
 
-### Runtime Topology
-
 ```mermaid
 flowchart LR
-  subgraph Sources["TTC and map data"]
-    Live["TTC BusTime GTFS-RT<br/>vehicles, trips, alerts"]
-    Static["TTC merged static GTFS<br/>routes, stops, schedules"]
-    Tiles["OpenStreetMap and OpenFreeMap<br/>raster and vector tiles"]
-  end
+  Static[TransLink static GTFS]
+  Realtime[TransLink GTFS-realtime]
+  ACA[Azure Container App publisher]
+  Eventstream[Fabric Eventstream]
+  Eventhouse[Fabric Eventhouse]
+  Rayfin[Rayfin Fabric App]
+  Browser[Operations browser]
 
-  subgraph Azure["Azure Container Apps"]
-    Publisher["TTC publisher<br/>poll, decode, normalize"]
-    Snapshot["Snapshot and query API<br/>/api/live, /api/snapshot, /api/health"]
-  end
-
-  subgraph Fabric["Microsoft Fabric workspace"]
-    Eventstream["TTCTelemetry Eventstream<br/>Custom Endpoint and SQL router"]
-    Eventhouse["TTCOperations KQL database<br/>live telemetry store"]
-    Ingest["TTCNativeIngest notebook<br/>fetch, decode, enrich"]
-    subgraph Lakehouse["TTCSchedule Lakehouse: static GTFS, daily"]
-      Bronze["bronze_stop_times<br/>as published"]
-      Silver["silver_stop_times<br/>typed and cleaned"]
-      Gold["gold_schedule_lookup<br/>trip and stop grain"]
-    end
-    Rayfin["Rayfin AppBackend<br/>Fabric SSO and static hosting"]
-    SQL["Rayfin managed SQL<br/>OperatorNote"]
-    Queries["KQL and real-time<br/>dashboard queries"]
-  end
-
-  Browser["Operations browser<br/>React, Leaflet, and MapLibre"]
-
-  Live --> Publisher
-  Static --> Publisher
-  Static -->|"daily archive"| Bronze
-  Bronze --> Silver --> Gold
-  Live --> Ingest
-  Gold -->|"schedule adherence"| Ingest
-  Ingest --> Eventhouse
-  Publisher -->|"Kafka batches"| Eventstream
-  Eventstream -->|"processed ingestion"| Eventhouse
-  Eventhouse --> Queries
-  Queries -->|"CurrentFleet and ActiveAlerts"| Snapshot
-  Snapshot -->|"HTTPS live fleet"| Browser
-  Tiles --> Browser
-  Browser <-->|"Fabric SSO and typed data API"| Rayfin
-  Rayfin --> SQL
+  Static --> ACA
+  Static --> FabricSchedule[Fabric schedule Lakehouse]
+  Realtime --> ACA
+  ACA -->|normalized JSON over Kafka| Eventstream
+  Eventstream --> Eventhouse
+  Eventhouse --> ACA
+  ACA --> Browser
+  Rayfin --> Browser
 ```
 
-Static reference data and live telemetry are deliberately separated. The
-schedule changes daily and belongs in a Lakehouse, where medallion layers keep
-the published archive, the typed form, and the serving grain distinct. Vehicle
-telemetry changes every few seconds and belongs in Eventhouse, where KQL answers
-the dashboard directly.
+The realtime publisher stays in Azure Container Apps because TransLink exposes
+three API-key-protected Protobuf feeds. Fabric Eventstream supplies the custom
+endpoint used as the event broker, but it does not poll or decode the feeds.
 
-### Component Responsibilities
+## TransLink data contract
 
-| Layer          | Deployed component   | Responsibility                      |
-| -------------- | -------------------- | ----------------------------------- |
-| Ingestion      | Container App        | Normalize and publish TTC events    |
-| Live API       | HTTPS ingress        | Serve KQL results and health        |
-| Stream routing | `TTCTelemetry`       | Route vehicles, trips, and alerts   |
-| Live store     | `TTCOperations`      | Hold telemetry tables and functions |
-| Static store   | `TTCSchedule`        | Hold GTFS bronze, silver, gold      |
-| Fabric ingest  | `TTCNativeIngest`    | Fetch, decode, and enrich in Fabric |
-| Application    | Rayfin AppBackend    | Host React, SSO, and the data API   |
-| Operator data  | Managed SQL          | Store user-scoped operator notes    |
-| Map            | Leaflet and MapLibre | Render 2D and optional 3D views     |
+Realtime endpoints require a registered TransLink Open API key:
 
-> [!NOTE]
-> The 2D Leaflet map remains the default and fallback. The optional 3D view
-> loads MapLibre in a separate Vite chunk, uses an inline style, and runs its
-> module worker from the Rayfin static-hosting origin. Direct OpenFreeMap vector
-> tiles provide building height fields without a remote style, sprite, or glyph
-> dependency. Browsers without WebGL 2 return to 2D with an operator notice.
+* Trip updates: `https://gtfsapi.translink.ca/v3/gtfsrealtime`
+* Vehicle positions: `https://gtfsapi.translink.ca/v3/gtfsposition`
+* Service alerts: `https://gtfsapi.translink.ca/v3/gtfsalerts`
 
-### Reference Deployment
+The publisher appends the key as the `apikey` query parameter. It never logs the
+key or includes the complete request URL in an error message.
 
-The values below describe the shape of a deployment, not a public endpoint.
-Deployment identifiers for your own workspace land in the gitignored
-`.fabric/deployment.local.json`.
+Static GTFS is public:
 
-| Resource           | Value                                          |
-| ------------------ | ---------------------------------------------- |
-| Source             | [alexaca79/ttc-digitaltwin][source-repository] |
-| Fabric app         | Rayfin AppBackend, reached through Fabric      |
-| Fabric workspace   | One workspace on supported capacity            |
-| Fabric capacity    | `F64` used for this build                      |
-| Publisher API      | Container App ingress, HTTPS only              |
-| Publisher scaling  | One warm replica, 0.5 CPU, 1 GiB memory        |
-| Eventstream source | `TTCPublisher` Custom Endpoint                 |
+* `https://gtfs-static.translink.ca/gtfs/google_transit.zip`
 
-> [!IMPORTANT]
-> The publisher endpoints are unauthenticated. `PUBLISHER_ALLOWED_ORIGIN`
-> restricts browser origins through CORS, which is not an authorization
-> control. Keep the ingress private, or place a gateway in front of it, before
-> pointing anything beyond public TTC data at this API.
+TransLink requires this legend when displaying its data:
 
-### Security Boundaries
+> Route and arrival data used in this product or service is provided by
+> permission of TransLink. TransLink assumes no responsibility for the accuracy
+> or currency of the Data used in this product or service.
 
-* The browser receives only public map tiles, the HTTPS snapshot, and a Rayfin
-  publishable key. It never receives Fabric Eventstream credentials.
-* The production publisher keeps the Eventstream connection string in an Azure
-  Container Apps secret and references it through an environment variable.
-* The Container App uses its system-assigned managed identity to pull the
-  publisher image from Azure Container Registry.
-* Snapshot API CORS is restricted to the deployed Rayfin static-hosting origin.
-* `PUBLISHER_RATE_LIMIT_PER_MINUTE` throttles each caller and defaults to 60.
-* `/api/health` reports whether a dependency is failing without naming it.
-  `PUBLISHER_EXPOSE_ERROR_DETAIL=true` restores the text for private runs.
-* Fabric SSO protects the deployed application and Rayfin managed SQL access.
-* Local `npm run fabric:publisher` retrieves Custom Endpoint credentials at
-  startup and keeps them in process memory. Credentials are never written to
-  the repository or `.fabric/deployment.local.json`.
+The application displays this legend in its map panel.
 
-The Eventstream uses processed ingestion, so the workload can be deployed
-through the Fabric REST API without a portal-created Eventhouse connection.
+## Local validation
 
-[source-repository]: https://github.com/alexaca79/ttc-digitaltwin
-See [DEPLOYMENT.md](DEPLOYMENT.md) for the complete fresh-deployment runbook,
-validation checks, rollback procedures, monitoring guidance, and operator data
-roadmap.
-
-> [!NOTE]
-> TTC currently publishes zero in the GTFS-realtime delay fields. The publisher
-> estimates schedule deviation by comparing predicted stop timestamps with
-> static GTFS stop times in the `America/Toronto` time zone. It uses the median
-> deviation across matched stops. Vehicles without a reliable trip and stop
-> match remain `Not reported` and are excluded from schedule percentages.
-
-## Local Demo
-
-Prerequisites are Node.js 22 or later and npm.
+Install dependencies and build the TransLink network asset:
 
 ```powershell
-npm install
+npm ci
 npm run gtfs:sync
+npm test
+npm run lint
+npm run build
+npm run typecheck:tools
+npm run fabric:plan
 ```
 
-Start the live TTC snapshot API in one terminal:
+Run the deterministic local demo without a TransLink API key:
+
+```powershell
+npx vite --mode demo --host=127.0.0.1 --port=5175
+```
+
+Open <http://127.0.0.1:5175>.
+
+To run live data locally, set `TRANSLINK_API_KEY` in the publisher terminal
+without placing its value in the repository, then run:
 
 ```powershell
 npm run ingest
 ```
 
-Start the dashboard in a second terminal:
+In a second terminal, point the demo UI at that publisher:
 
 ```powershell
+$env:VITE_TELEMETRY_API_URL = 'http://127.0.0.1:7071'
 npm run dev:demo
 ```
 
-Open [http://localhost:5173](http://localhost:5173). Demo authentication is
-automatic. Operator notes
-use browser local storage in demo mode. When the publisher is unavailable, the
-dashboard switches to clearly labeled deterministic simulation data.
+The live publisher listens on <http://127.0.0.1:7071>. The dashboard requests
+`/api/live` first and falls back to `/api/snapshot` if Eventhouse is
+unavailable.
 
-## Fabric Prerequisites
+The publisher image contains the static GTFS files generated by
+`npm run gtfs:sync`. Its health response exposes `scheduleFeedEndDate` and
+`scheduleCurrent`, and readiness fails when that bundled schedule expires.
 
-* A Fabric workspace assigned to supported capacity
-* Contributor or higher workspace role
-* Fabric Apps (preview) enabled by the tenant administrator
-* Permission to grant the publisher identity viewer access on `TTCOperations`
-* Azure CLI signed in with an isolated `AZURE_CONFIG_DIR`
+## Deployment
 
-Set the isolated Azure CLI context before any Fabric operation. The active
-tenant and subscription must match the arguments passed to the deployment
-script.
+The deployment uses:
 
-```powershell
-$env:AZURE_CONFIG_DIR = "$env:USERPROFILE\.azure-tenants\<alias>"
-az login --tenant <tenant-id>
-az account set --subscription <subscription-id-or-name>
-az account show --query "{tenant:tenantId, subscription:name}" --output table
-```
+* A new Fabric workspace assigned to an existing supported Fabric capacity
+* `TransLinkEventhouse`, `TransLinkOperations`, and `TransLinkTelemetry`
+* A `TransLinkSchedule` Lakehouse and static GTFS notebooks
+* A Rayfin Fabric App for SSO, static hosting, and operator notes
+* A new Azure resource group for ACR, the Container Apps environment, and the
+  publisher
 
-## Fabric Deployment
+Start with [DEPLOYMENT-QUICKSTART.md](DEPLOYMENT-QUICKSTART.md). Operational and
+recovery detail is in [DEPLOYMENT.md](DEPLOYMENT.md).
 
-Validate every generated definition without contacting Fabric:
+## Security boundaries
 
-```powershell
-npm run fabric:plan
-```
+* The TransLink API key is a publisher secret and never enters browser code.
+* Eventstream credentials remain in the publisher process or ACA secrets.
+* The browser receives only public transit data, map tiles, and a Rayfin
+  publishable key.
+* Publisher endpoints contain public data but are unauthenticated. CORS and
+  per-client throttling reduce casual misuse but are not authorization.
+* Add Entra authentication or a governed API gateway before exposing internal
+  operational, employee, passenger, or incident data.
 
-Provision or update the RTI items:
-
-```powershell
-npm run fabric:deploy -- `
- --tenant-id <tenant-id> `
- --subscription <subscription-id-or-name> `
- --workspace-name <new-workspace-name>
-```
-
-You can use `--workspace-id` instead of `--workspace-name`. The script creates
-or reuses these items:
-
-* `TTCEventhouse` and the `TTCOperations` KQL database
-* `TTCTelemetry` Eventstream
-* `TTCSchedule` Lakehouse for static GTFS
-* `TTCScheduleBronze`, `TTCScheduleSilver`, and `TTCScheduleGold` notebooks
-* `TTCNativeIngest` notebook for container-free ingestion
-* `TTCFeedDecoder` notebook for the Eventstream decode path
-
-Notebook parameter defaults are templated with the resolved Lakehouse and
-Eventhouse identifiers, because Fabric schedules cannot pass parameters.
-
-`TTCScheduleBronze` downloads the City of Toronto GTFS archive and chains silver
-and gold, so one daily schedule refreshes the whole static chain. Register it to
-run daily at 03:00 Eastern:
-
-```powershell
-$Deployment = Get-Content .fabric/deployment.local.json | ConvertFrom-Json
-$Body = @{
-  enabled       = $true
-  configuration = @{
-    type            = 'Daily'
-    startDateTime   = '2026-08-19T03:00:00'
-    endDateTime     = '2030-01-01T00:00:00'
-    localTimeZoneId = 'Eastern Standard Time'
-    times           = @('03:00')
-  }
-} | ConvertTo-Json -Depth 6
-```
-
-Post that body to the bronze notebook's `jobs/RunNotebook/schedules` endpoint.
-Schedule adherence stays null until the gold table exists.
-
-Start the live publisher against the deployed Eventstream:
-
-```powershell
-npm run fabric:publisher
-```
-
-Deploy the authenticated Rayfin app and its `OperatorNote` schema:
-
-```powershell
-npx rayfin login
-npx rayfin up --workspace-id <workspace-id>
-npx rayfin up status
-```
-
-Set `VITE_TELEMETRY_API_URL` to a hosted snapshot API before the Rayfin build if
-the deployed app should use live telemetry directly. Without it, the app remains
-a functional, explicitly labeled simulation while RTI continues ingesting live
-events independently.
-
-## Data Sources
-
-* TTC BusTime GTFS-realtime: [https://bustime.ttc.ca/gtfsrt](https://bustime.ttc.ca/gtfsrt)
-* TTC merged routes and schedules:
-  [https://open.toronto.ca/dataset/merged-gtfs-ttc-routes-and-schedules/](https://open.toronto.ca/dataset/merged-gtfs-ttc-routes-and-schedules/)
-* City of Toronto Open Data Licence:
-  [https://open.toronto.ca/open-data-licence/](https://open.toronto.ca/open-data-licence/)
-* Leaflet map renderer: [https://leafletjs.com/](https://leafletjs.com/)
-* MapLibre GL JS renderer: [https://maplibre.org/maplibre-gl-js/docs/](https://maplibre.org/maplibre-gl-js/docs/)
-* OpenFreeMap vector tiles: [https://openfreemap.org/](https://openfreemap.org/)
-* OpenStreetMap standard tiles and map data:
-  [https://www.openstreetmap.org/copyright](https://www.openstreetmap.org/copyright)
-
-The generated static asset records its source URL, generation time, and licence
-URL. The current verified sync produced 224 routes, 11,946 stops, 133,557 trips,
-and eight service calendars. The sync also creates a byte-offset schedule index,
-which lets the publisher read and cache only active trips from the full
-`stop_times.txt` file.
-
-## Repository Layout
+## Repository layout
 
 ```text
-fabric/                 Fabric item definitions, KQL, and dashboard queries
-ingest/                 GTFS-realtime decoder, API, and Eventstream publisher
-rayfin/                 Rayfin configuration and typed operator-note schema
-scripts/                Static GTFS sync and Fabric deployment tooling
-src/                    React operations workspace
-public/data/            Generated compact TTC network asset
+fabric/        Fabric item definitions, notebooks, and KQL
+ ingest/       TransLink GTFS-realtime decoder and publisher API
+ rayfin/       Rayfin configuration and operator-note schema
+ scripts/      GTFS generation and Fabric deployment tooling
+ src/          React operations workspace
+ public/data/  Generated TransLink network asset
 ```
 
-## Commands
+## Official references
 
-| Command | Purpose |
-| --- | --- |
-| `npm run dev:demo` | Run the dashboard without Rayfin services |
-| `npm run ingest` | Poll TTC and expose the local snapshot API |
-| `npm run ingest:once` | Decode and normalize one live TTC poll |
-| `npm run gtfs:sync` | Refresh static TTC data and schedule index |
-| `npm run fabric:plan` | Validate parameterized Fabric definitions |
-| `npm run fabric:deploy` | Provision or update the Fabric workload |
-| `npm run fabric:publisher` | Publish to the Custom Endpoint |
-| `npm run rayfin:up` | Deploy the Rayfin Fabric App |
-| `npm run build` | Create a production frontend build |
-| `npm run typecheck:tools` | Type-check publisher and deploy scripts |
-| `npm test` | Run the Vitest suite |
-| `npm run lint` | Run ESLint |
+* [TransLink application developer resources](https://www.translink.ca/about-us/doing-business-with-translink/app-developer-resources)
+* [TransLink GTFS-realtime](https://www.translink.ca/about-us/doing-business-with-translink/app-developer-resources/gtfs/gtfs-realtime)
+* [TransLink static GTFS and terms](https://www.translink.ca/about-us/doing-business-with-translink/app-developer-resources/gtfs/gtfs-data)
+* [GTFS-realtime specification](https://gtfs.org/documentation/realtime/reference/)

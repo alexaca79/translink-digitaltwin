@@ -13,8 +13,8 @@ import {
   RefreshCw,
   Route as RouteIcon,
   Search,
+  Ship,
   TrainFront,
-  TramFront,
   TriangleAlert,
 } from 'lucide-react';
 
@@ -27,7 +27,7 @@ import {
   type LineOperationsSummary,
   type RouteDelaySummary,
 } from '@/data/delayAnalytics';
-import { TTC_ROUTES } from '@/data/demoNetwork';
+import { TRANSLINK_ROUTES } from '@/data/demoNetwork';
 import { useAuth } from '@/hooks/AuthContext';
 import { useStaticNetwork } from '@/hooks/useStaticNetwork';
 import { useTransitFeed } from '@/hooks/useTransitFeed';
@@ -51,8 +51,8 @@ const MapLibreTransitMap = lazy(() =>
 
 const modeIcons = {
   bus: BusFront,
-  streetcar: TramFront,
-  subway: TrainFront,
+  rail: TrainFront,
+  ferry: Ship,
 };
 
 const lineStateOrder: VehicleState[] = [
@@ -135,8 +135,8 @@ function LineStory({
   const modeNoun =
     summary.mode === 'bus'
       ? 'buses'
-      : summary.mode === 'streetcar'
-        ? 'streetcars'
+      : summary.mode === 'ferry'
+        ? 'ferries'
         : 'trains';
   const delayStory =
     summary.states.delayed === 0
@@ -302,20 +302,20 @@ function DelayComparisonChart({ vehicles }: { vehicles: VehicleTelemetry[] }) {
     () => summarizeRouteDelays(vehicles, 'bus'),
     [vehicles]
   );
-  const streetcarRoutes = useMemo(
-    () => summarizeRouteDelays(vehicles, 'streetcar'),
+  const railRoutes = useMemo(
+    () => summarizeRouteDelays(vehicles, 'rail'),
     [vehicles]
   );
   const maximumDelay = Math.max(
     1,
     ...busRoutes.map((route) => route.averageDelayMinutes),
-    ...streetcarRoutes.map((route) => route.averageDelayMinutes)
+    ...railRoutes.map((route) => route.averageDelayMinutes)
   );
 
   return (
     <section
       className="delay-comparison"
-      aria-label="Most delayed bus and streetcar lines"
+      aria-label="Most delayed bus and rail lines"
     >
       <header>
         <div>
@@ -327,8 +327,8 @@ function DelayComparisonChart({ vehicles }: { vehicles: VehicleTelemetry[] }) {
       <div className="delay-comparison-grid">
         <DelayBars mode="bus" routes={busRoutes} maximumDelay={maximumDelay} />
         <DelayBars
-          mode="streetcar"
-          routes={streetcarRoutes}
+          mode="rail"
+          routes={railRoutes}
           maximumDelay={maximumDelay}
         />
       </div>
@@ -391,7 +391,7 @@ export function HomePage() {
         (route) =>
           route.id === selectedVehicle.routeId &&
           route.mode === selectedVehicle.mode
-      ) ?? TTC_ROUTES.find((route) => route.id === selectedVehicle.routeId)
+      ) ?? TRANSLINK_ROUTES.find((route) => route.id === selectedVehicle.routeId)
     : null;
   const vehiclesWithSchedule = snapshot.vehicles.filter(
     (vehicle): vehicle is VehicleTelemetry & { scheduleDeviationSeconds: number } =>
@@ -412,7 +412,7 @@ export function HomePage() {
   return (
     <main className="operations-shell">
       <aside className="tool-rail" aria-label="Workspace tools">
-        <div className="ttc-mark" aria-label="TTC Digital Twin"><span>TTC</span></div>
+        <div className="translink-mark" aria-label="TransLink Digital Twin"><span>TL</span></div>
         <nav>
           <button className={activePanel === 'fleet' ? 'active' : ''} onClick={() => setActivePanel('fleet')} title="Fleet map"><Map size={20} /></button>
           <button className={activePanel === 'alerts' ? 'active' : ''} onClick={() => setActivePanel('alerts')} title="Service alerts">
@@ -430,13 +430,13 @@ export function HomePage() {
         <header className="topbar">
           <div className="product-title">
             <span className="eyebrow">Operations control</span>
-            <h1>Toronto transit digital twin</h1>
+            <h1>Metro Vancouver transit digital twin</h1>
           </div>
           <div className="source-status">
             <span className={`status-dot ${connectionState}`} />
             <div>
               <strong>{connectionState === 'connected' ? 'GTFS-RT live' : connectionState === 'degraded' ? 'Live feed degraded' : 'Simulation mode'}</strong>
-              <small>{liveConfigured ? 'TTC BusTime + static GTFS' : 'Deterministic open-data model'}</small>
+              <small>{liveConfigured ? 'TransLink GTFS-RT + static GTFS' : 'Deterministic open-data model'}</small>
             </div>
           </div>
           <div className="observation-time">
@@ -491,7 +491,7 @@ export function HomePage() {
 
             <div className="map-filter-bar">
               <div className="segmented-control" aria-label="Transport mode">
-                {(['all', 'subway', 'streetcar', 'bus'] as ModeFilter[]).map((mode) => (
+                {(['all', 'rail', 'ferry', 'bus'] as ModeFilter[]).map((mode) => (
                   <button key={mode} className={modeFilter === mode ? 'active' : ''} onClick={() => setModeFilter(mode)}>
                     {mode === 'all' ? 'All modes' : mode}
                   </button>
@@ -523,8 +523,8 @@ export function HomePage() {
                 <span className="legend-section-label">Mode</span>
                 <div className="legend-items">
                   <span className="legend-item"><span className="legend-mode bus"><BusFront size={12} aria-hidden="true" /></span>Bus</span>
-                  <span className="legend-item"><span className="legend-mode streetcar"><TramFront size={12} aria-hidden="true" /></span>Streetcar</span>
-                  <span className="legend-item"><span className="legend-mode subway"><TrainFront size={12} aria-hidden="true" /></span>Subway</span>
+                  <span className="legend-item"><span className="legend-mode rail"><TrainFront size={12} aria-hidden="true" /></span>Rail</span>
+                  <span className="legend-item"><span className="legend-mode ferry"><Ship size={12} aria-hidden="true" /></span>SeaBus</span>
                 </div>
               </div>
               <div className="legend-section">
@@ -538,6 +538,12 @@ export function HomePage() {
                   <span className="legend-item"><span className="legend-line" aria-hidden="true" />Route</span>
                 </div>
               </div>
+              <p className="data-attribution">
+                Route and arrival data used in this product or service is
+                provided by permission of TransLink. TransLink assumes no
+                responsibility for the accuracy or currency of the Data used
+                in this product or service.
+              </p>
             </aside>
 
             {selectedVehicle && selectedLineSummary && (
@@ -546,7 +552,7 @@ export function HomePage() {
                 vehicles={selectedLineVehicles}
                 selectedVehicle={selectedVehicle}
                 routeName={selectedRoute?.longName ?? selectedVehicle.label}
-                routeColor={selectedRoute?.color ?? '#d71920'}
+                routeColor={selectedRoute?.color ?? '#0073c6'}
                 onAddNote={() => setActivePanel('notes')}
               />
             )}
@@ -566,7 +572,7 @@ export function HomePage() {
                         title={`${vehicle.label}: ${formatDeviation(vehicle.scheduleDeviationSeconds)}`}
                       />
                     ))
-                  : <div className="deviation-unavailable">TTC delay data not reported</div>}
+                  : <div className="deviation-unavailable">TransLink delay data not reported</div>}
               </div>
               <div className="timeline-scale"><span>-5m</span><span>now</span><span>+5m</span></div>
             </div>

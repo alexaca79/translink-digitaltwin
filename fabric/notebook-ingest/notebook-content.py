@@ -11,10 +11,10 @@
 
 # MARKDOWN ********************
 
-# ## TTC native ingest
+# ## TransLink native ingest
 #
-# Fetches TTC GTFS-realtime directly, decodes the protobuf, derives schedule
-# adherence from the gold Lakehouse table, and writes into the `TTCOperations`
+# Fetches TransLink GTFS-realtime directly, decodes the protobuf, derives schedule
+# adherence from the gold Lakehouse table, and writes into the `TransLinkOperations`
 # Eventhouse where KQL serves the live application.
 #
 # One run polls for `run_duration_seconds`, sleeping `poll_seconds` between
@@ -43,9 +43,12 @@ if importlib.util.find_spec("google.transit") is None:
 # PARAMETERS CELL ********************
 
 kql_cluster_uri = "{{KQL_CLUSTER_URI}}"
-kql_database = "TTCOperations"
+kql_database = "TransLinkOperations"
 lakehouse_abfss = "{{LAKEHOUSE_ABFSS}}"
-feed_base_url = "https://bustime.ttc.ca/gtfsrt"
+translink_api_key = ""
+trips_url = "https://gtfsapi.translink.ca/v3/gtfsrealtime"
+positions_url = "https://gtfsapi.translink.ca/v3/gtfsposition"
+alerts_url = "https://gtfsapi.translink.ca/v3/gtfsalerts"
 poll_seconds = 15
 run_duration_seconds = 60
 
@@ -75,7 +78,8 @@ from pyspark.sql.types import (
 )
 
 KUSTO_FORMAT = "com.microsoft.kusto.spark.synapse.datasource"
-SUBWAY_ROUTES = {"1", "2", "3", "4"}
+RAIL_ROUTES = {"13686", "30052", "30053", "6770"}
+FERRY_ROUTES = {"6771"}
 SECONDS_PER_DAY = 24 * 60 * 60
 HALF_DAY_SECONDS = SECONDS_PER_DAY // 2
 
@@ -144,16 +148,23 @@ ALERT_SCHEMA = StructType(
 
 # CELL ********************
 
-def fetch_feed(name):
-    response = requests.get(
-        f"{feed_base_url}/{name}",
-        headers={
-            "Accept": "application/x-protobuf, application/octet-stream",
-            "User-Agent": "ttc-digital-twin-open-data/1.0",
-        },
-        timeout=15,
-    )
-    response.raise_for_status()
+def fetch_feed(name, url):
+    if not translink_api_key:
+        raise ValueError("translink_api_key parameter is required")
+    try:
+        response = requests.get(
+            url,
+            params={"apikey": translink_api_key},
+            headers={
+                "Accept": "application/x-protobuf, application/octet-stream",
+                "User-Agent": "translink-digital-twin/1.0",
+            },
+            timeout=15,
+        )
+    except requests.RequestException as error:
+        raise RuntimeError(f"{name} request failed ({type(error).__name__})") from None
+    if not response.ok:
+        raise RuntimeError(f"{name} returned HTTP {response.status_code}")
     content_type = response.headers.get("content-type", "")
     if "protobuf" not in content_type and "octet-stream" not in content_type:
         raise ValueError(f"{name} returned '{content_type}' instead of protobuf")
@@ -163,10 +174,10 @@ def fetch_feed(name):
 
 
 def transit_mode(route_id):
-    if route_id in SUBWAY_ROUTES:
-        return "subway"
-    if route_id.startswith("5") and len(route_id) == 3:
-        return "streetcar"
+    if route_id in RAIL_ROUTES:
+        return "rail"
+    if route_id in FERRY_ROUTES:
+        return "ferry"
     return "bus"
 
 
@@ -219,7 +230,7 @@ def build_trip_rows(feed, observed_at):
                     int(stop_time.arrival.time) if stop_time.HasField("arrival") else 0,
                     int(stop_time.departure.time) if stop_time.HasField("departure") else 0,
                     delay,
-                    "ttc-gtfs-rt",
+                    "translink-gtfs-rt",
                 )
             )
     return rows
@@ -250,7 +261,7 @@ def build_vehicle_rows(feed, observed_at):
                 ),
                 vehicle.stop_id or "",
                 STOP_STATUS.get(vehicle.current_status, "UNKNOWN"),
-                "ttc-gtfs-rt",
+                "translink-gtfs-rt",
             )
         )
     return rows
@@ -279,7 +290,7 @@ def build_alert_rows(feed, observed_at):
                 str(alert.effect),
                 int(active.start) if active and active.start else 0,
                 int(active.end) if active and active.end else 0,
-                "ttc-gtfs-rt",
+                "translink-gtfs-rt",
             )
         )
     return rows
@@ -319,7 +330,7 @@ def deviation_by_trip(trip_df, schedule_df):
     ).where(F.col("PredictedEpochSeconds").isNotNull())
 
     local = F.from_utc_timestamp(
-        F.to_timestamp(F.col("PredictedEpochSeconds")), "America/Toronto"
+        F.to_timestamp(F.col("PredictedEpochSeconds")), "America/Vancouver"
     )
     predicted = predicted.withColumn(
         "PredictedSecondOfDay",
@@ -439,9 +450,9 @@ try:
         observed_at = datetime.now(tz=timezone.utc)
 
         summary["stage"] = f"fetch:{cycle}"
-        trip_rows = build_trip_rows(fetch_feed("trips"), observed_at)
-        vehicle_rows = build_vehicle_rows(fetch_feed("vehicles"), observed_at)
-        alert_rows = build_alert_rows(fetch_feed("alerts"), observed_at)
+        trip_rows = build_trip_rows(fetch_feed("trips", trips_url), observed_at)
+        vehicle_rows = build_vehicle_rows(fetch_feed("positions", positions_url), observed_at)
+        alert_rows = build_alert_rows(fetch_feed("alerts", alerts_url), observed_at)
 
         summary["stage"] = f"enrich:{cycle}"
         trip_df = spark.createDataFrame(trip_rows, schema=TRIP_SCHEMA)

@@ -1,6 +1,7 @@
 import GtfsRealtimeBindings, { type transit_realtime } from 'gtfs-realtime-bindings';
 
 import type { ServiceAlert, TransitMode, TransitSnapshot, VehicleState, VehicleTelemetry } from '../src/types/transit.js';
+import type { RealtimeFeedConfig } from './config.js';
 import type { GtfsScheduleLookup, ScheduledStopTime } from './gtfsSchedule.js';
 import type {
   NormalizedTransitEvent,
@@ -11,10 +12,8 @@ import type {
 } from './events.js';
 import { computeScheduleDeviation, medianDeviation } from './scheduleDeviation.js';
 
-const STREETCAR_ROUTES = new Set([
-  '301', '304', '305', '306', '310', '312',
-  '501', '503', '504', '505', '506', '508', '509', '510', '511', '512',
-]);
+const RAIL_ROUTES = new Set(['13686', '30052', '30053', '6770']);
+const FERRY_ROUTES = new Set(['6771']);
 
 function longToNumber(value: number | Long | null | undefined) {
   if (typeof value === 'number') return value;
@@ -22,7 +21,9 @@ function longToNumber(value: number | Long | null | undefined) {
 }
 
 function routeMode(routeId: string): TransitMode {
-  return STREETCAR_ROUTES.has(routeId) ? 'streetcar' : 'bus';
+  if (RAIL_ROUTES.has(routeId)) return 'rail';
+  if (FERRY_ROUTES.has(routeId)) return 'ferry';
+  return 'bus';
 }
 
 function occupancy(status: transit_realtime.VehiclePosition.OccupancyStatus | null | undefined) {
@@ -57,16 +58,18 @@ function enumName(enumType: Record<number, string>, value: number | null | undef
   return value == null ? 'UNKNOWN' : enumType[value] ?? String(value);
 }
 
-async function fetchFeed(url: string) {
+async function fetchFeed(name: string, endpoint: string, apiKey: string) {
+  const url = new URL(endpoint);
+  url.searchParams.set('apikey', apiKey);
   const response = await fetch(url, {
     headers: {
       Accept: 'application/x-protobuf, application/octet-stream',
-      'User-Agent': 'ttc-digital-twin-open-data/1.0',
+      'User-Agent': 'translink-digital-twin/1.0',
     },
     signal: AbortSignal.timeout(15_000),
   });
   if (!response.ok) {
-    throw new Error(`${url} returned ${response.status} ${response.statusText}.`);
+    throw new Error(`${name} feed returned ${response.status} ${response.statusText}.`);
   }
   return GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(
     new Uint8Array(await response.arrayBuffer())
@@ -88,8 +91,13 @@ function tripUpdateEvents(
   const computedByVehicle = new Map<string, number>();
   const reportedByTrip = new Map<string, number>();
   const reportedByVehicle = new Map<string, number>();
-  const pendingEvents: Array<{ event: TripUpdateEvent; computed: boolean }> = [];
-  let hasReportedScheduleSignal = false;
+  const pendingEvents: Array<{ event: TripUpdateEvent; hasSignal: boolean }> = [];
+
+  const reportedDelay = (value: object | null | undefined) => {
+    if (!value || !Object.prototype.hasOwnProperty.call(value, 'delay')) return null;
+    const delay = Reflect.get(value, 'delay');
+    return typeof delay === 'number' ? delay : null;
+  };
 
   const stopDeviation = (
     stop: transit_realtime.TripUpdate.IStopTimeUpdate,
@@ -114,12 +122,15 @@ function tripUpdateEvents(
     const routeId = update.trip?.routeId ?? '';
     const vehicleId = update.vehicle?.id ?? '';
     const stopTimeUpdates = update.stopTimeUpdate ?? [];
+    const updateDelay = reportedDelay(update);
     const reportedDelays = [
-      update.delay,
-      ...stopTimeUpdates.flatMap((stop) => [stop.arrival?.delay, stop.departure?.delay]),
+      updateDelay,
+      ...stopTimeUpdates.flatMap((stop) => [
+        reportedDelay(stop.arrival),
+        reportedDelay(stop.departure),
+      ]),
     ].filter((delay): delay is number => delay != null);
-    const tripDelay = update.delay ?? reportedDelays[0] ?? 0;
-    hasReportedScheduleSignal ||= reportedDelays.some((delay) => delay !== 0);
+    const tripDelay = updateDelay ?? reportedDelays[0] ?? 0;
     if (tripId && reportedDelays.length > 0) reportedByTrip.set(tripId, tripDelay);
     if (vehicleId && reportedDelays.length > 0) reportedByVehicle.set(vehicleId, tripDelay);
     const computedStopDelays: number[] = [];
@@ -134,7 +145,7 @@ function tripUpdateEvents(
       const computedDelay = stopDeviation(stop, scheduled);
       if (computedDelay != null) computedStopDelays.push(computedDelay);
       pendingEvents.push({
-        computed: computedDelay != null,
+        hasSignal: computedDelay != null || reportedDelays.length > 0,
         event: {
         eventType: 'TripUpdate',
         eventId: `${entity.id}:${stop.stopSequence ?? stopId}:${observedAt.getTime()}`,
@@ -146,8 +157,11 @@ function tripUpdateEvents(
         stopSequence: stop.stopSequence ?? 0,
         arrivalEpochSeconds: longToNumber(stop.arrival?.time),
         departureEpochSeconds: longToNumber(stop.departure?.time),
-        delaySeconds: computedDelay ?? stop.arrival?.delay ?? stop.departure?.delay ?? tripDelay,
-        source: 'ttc-gtfs-rt',
+        delaySeconds: computedDelay
+          ?? reportedDelay(stop.arrival)
+          ?? reportedDelay(stop.departure)
+          ?? tripDelay,
+        source: 'translink-gtfs-rt',
         },
       });
     }
@@ -160,21 +174,17 @@ function tripUpdateEvents(
   for (const pending of pendingEvents) {
     events.push({
       ...pending.event,
-      delaySeconds: pending.computed || hasReportedScheduleSignal
-        ? pending.event.delaySeconds
-        : null,
+      delaySeconds: pending.hasSignal ? pending.event.delaySeconds : null,
     });
   }
 
   const delaysByTrip = new Map(computedByTrip);
   const delaysByVehicle = new Map(computedByVehicle);
-  if (hasReportedScheduleSignal) {
-    for (const [tripId, delay] of reportedByTrip) {
-      if (!delaysByTrip.has(tripId)) delaysByTrip.set(tripId, delay);
-    }
-    for (const [vehicleId, delay] of reportedByVehicle) {
-      if (!delaysByVehicle.has(vehicleId)) delaysByVehicle.set(vehicleId, delay);
-    }
+  for (const [tripId, delay] of reportedByTrip) {
+    if (!delaysByTrip.has(tripId)) delaysByTrip.set(tripId, delay);
+  }
+  for (const [vehicleId, delay] of reportedByVehicle) {
+    if (!delaysByVehicle.has(vehicleId)) delaysByVehicle.set(vehicleId, delay);
   }
   const hasScheduleSignal = delaysByTrip.size > 0 || delaysByVehicle.size > 0;
   return { events, delaysByTrip, delaysByVehicle, hasScheduleSignal };
@@ -231,14 +241,14 @@ function vehicleEvents(
       state,
       stopId: vehicle.stopId ?? '',
       currentStatus: enumName(GtfsRealtimeBindings.transit_realtime.VehiclePosition.VehicleStopStatus, vehicle.currentStatus),
-      source: 'ttc-gtfs-rt',
+      source: 'translink-gtfs-rt',
     };
     events.push(normalized);
     vehicles.push({
       id: vehicleId,
       routeId,
       tripId,
-      label: `${routeId || 'TTC'} · ${vehicleLabel}`,
+      label: `${routeId || 'TransLink'} · ${vehicleLabel}`,
       mode: normalized.mode,
       latitude: normalized.latitude,
       longitude: normalized.longitude,
@@ -266,11 +276,24 @@ function alertEvents(
     const informedEntities = alert.informedEntity ?? [];
     const activePeriods = alert.activePeriod ?? [];
     const routeIds = [...new Set(informedEntities.map((selector) => selector.routeId).filter(Boolean))] as string[];
-    const title = translatedText(alert.headerText) || 'TTC service alert';
+    const title = translatedText(alert.headerText) || 'TransLink service alert';
     const description = translatedText(alert.descriptionText);
     const normalizedSeverity = severity(alert.severityLevel);
-    const activeStart = longToNumber(activePeriods[0]?.start);
-    const activeEnd = longToNumber(activePeriods[0]?.end);
+    const observedEpoch = Math.floor(observedAt.getTime() / 1000);
+    const periods = activePeriods.map((period) => ({
+      start: longToNumber(period.start),
+      end: longToNumber(period.end),
+    }));
+    const currentPeriod = periods.find(
+      (period) =>
+        (period.start === 0 || period.start <= observedEpoch) &&
+        (period.end === 0 || period.end > observedEpoch)
+    );
+    const nextPeriod = periods
+      .filter((period) => period.start > observedEpoch)
+      .sort((left, right) => left.start - right.start)[0];
+    const latestPeriod = [...periods].sort((left, right) => right.end - left.end)[0];
+    const relevantPeriod = currentPeriod ?? nextPeriod ?? latestPeriod ?? { start: 0, end: 0 };
     events.push({
       eventType: 'ServiceAlert',
       eventId: `${entity.id}:${observedAt.getTime()}`,
@@ -282,9 +305,9 @@ function alertEvents(
       routeIds,
       cause: enumName(GtfsRealtimeBindings.transit_realtime.Alert.Cause, alert.cause),
       effect: enumName(GtfsRealtimeBindings.transit_realtime.Alert.Effect, alert.effect),
-      activeStartEpochSeconds: activeStart,
-      activeEndEpochSeconds: activeEnd,
-      source: 'ttc-gtfs-rt',
+      activeStartEpochSeconds: relevantPeriod.start,
+      activeEndEpochSeconds: relevantPeriod.end,
+      source: 'translink-gtfs-rt',
     });
     alerts.push({
       id: entity.id,
@@ -298,19 +321,19 @@ function alertEvents(
   return { events, alerts };
 }
 
-export async function pollTtcFeeds(
-  feedBaseUrl: string,
+export async function pollTransLinkFeeds(
+  feeds: RealtimeFeedConfig,
   scheduleLookup: GtfsScheduleLookup | null = null
 ): Promise<PollResult> {
   const observedAt = new Date();
-  const vehicleFeedPromise = fetchFeed(`${feedBaseUrl}/vehicles`);
-  const tripFeedPromise = fetchFeed(`${feedBaseUrl}/trips`).catch((error: unknown) => {
+  const vehicleFeedPromise = fetchFeed('positions', feeds.positionsUrl, feeds.apiKey);
+  const tripFeedPromise = fetchFeed('trips', feeds.tripsUrl, feeds.apiKey).catch((error: unknown) => {
     console.warn('Trip-update feed unavailable for this poll:', error instanceof Error ? error.message : error);
     return GtfsRealtimeBindings.transit_realtime.FeedMessage.create({
       header: { gtfsRealtimeVersion: '2.0' },
     });
   });
-  const alertFeedPromise = fetchFeed(`${feedBaseUrl}/alerts`).catch((error: unknown) => {
+  const alertFeedPromise = fetchFeed('alerts', feeds.alertsUrl, feeds.apiKey).catch((error: unknown) => {
     console.warn('Alert feed unavailable for this poll:', error instanceof Error ? error.message : error);
     return GtfsRealtimeBindings.transit_realtime.FeedMessage.create({
       header: { gtfsRealtimeVersion: '2.0' },
@@ -340,7 +363,7 @@ export async function pollTtcFeeds(
     ...serviceAlerts.events,
   ];
   const snapshot: TransitSnapshot = {
-    source: 'ttc-gtfs-rt',
+    source: 'translink-gtfs-rt',
     observedAt: observedAt.toISOString(),
     vehicles: vehiclePositions.vehicles,
     alerts: serviceAlerts.alerts,

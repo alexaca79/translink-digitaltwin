@@ -5,7 +5,7 @@ import {
 } from '@microsoft/rayfin-auth-provider-fabric';
 import type { RayfinClient } from '@microsoft/rayfin-client';
 
-import type { TtcDigitalTwinSchema } from '../../rayfin/data/schema';
+import type { TransLinkDigitalTwinSchema } from '../../rayfin/data/schema';
 
 import { type AuthUser, type IAuthService, toAuthUser } from './IAuthService';
 
@@ -21,7 +21,7 @@ export class RayfinAuthService implements IAuthService {
   readonly fabricAuthEnabled = true;
 
   constructor(
-    private readonly client: RayfinClient<TtcDigitalTwinSchema>,
+    private readonly client: RayfinClient<TransLinkDigitalTwinSchema>,
     private readonly fabricOptions: FabricAuthOptions
   ) {}
 

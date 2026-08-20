@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-import { TTC_ROUTES } from '@/data/demoNetwork';
+import { TRANSLINK_ROUTES } from '@/data/demoNetwork';
 import type { StaticNetworkAsset, TransitRoute } from '@/types/transit';
 
 interface StaticNetworkState {
@@ -10,15 +10,15 @@ interface StaticNetworkState {
 
 export function useStaticNetwork(): StaticNetworkState {
   const [state, setState] = useState<StaticNetworkState>({
-    routes: TTC_ROUTES,
+    routes: TRANSLINK_ROUTES,
     asset: null,
   });
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch('/data/ttc-network.json', { signal: controller.signal })
+    fetch('/data/translink-network.json', { signal: controller.signal })
       .then((response) => {
-        if (!response.ok) throw new Error('Static TTC network asset is not available.');
+        if (!response.ok) throw new Error('Static TransLink network asset is not available.');
         return response.json() as Promise<StaticNetworkAsset>;
       })
       .then((asset) => {
@@ -26,7 +26,7 @@ export function useStaticNetwork(): StaticNetworkState {
       })
       .catch((error: unknown) => {
         if (!(error instanceof DOMException && error.name === 'AbortError')) {
-          setState({ routes: TTC_ROUTES, asset: null });
+          setState({ routes: TRANSLINK_ROUTES, asset: null });
         }
       });
     return () => controller.abort();

@@ -62,7 +62,7 @@ async function main() {
     throw new Error('Fabric returned incomplete Custom Endpoint connection details.');
   }
 
-  console.log('Starting TTC publisher with in-memory Fabric Eventstream credentials.');
+  console.log('Starting TransLink publisher with in-memory Fabric Eventstream credentials.');
   const child = spawn('npm', ['run', 'ingest'], {
     cwd: root,
     env: {
@@ -72,7 +72,7 @@ async function main() {
       FABRIC_EVENTSTREAM_USERNAME: '$ConnectionString',
       FABRIC_EVENTSTREAM_PASSWORD: connection.accessKeys.primaryConnectionString,
       FABRIC_KQL_QUERY_URI: deployment.queryServiceUri ?? '',
-      FABRIC_KQL_DATABASE: deployment.kqlDatabaseName ?? 'TTCOperations',
+      FABRIC_KQL_DATABASE: deployment.kqlDatabaseName ?? 'TransLinkOperations',
     },
     stdio: 'inherit',
     shell: process.platform === 'win32',

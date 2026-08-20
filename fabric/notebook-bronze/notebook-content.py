@@ -11,16 +11,16 @@
 
 # MARKDOWN ********************
 
-# ## Bronze: land the TTC static GTFS archive
+# ## Bronze: land the TransLink static GTFS archive
 #
-# Downloads the City of Toronto GTFS zip and lands `stop_times` and `trips`
+# Downloads the official TransLink GTFS zip and lands `stop_times` and `trips`
 # exactly as published, with no typing or filtering. Chains silver and gold so a
 # single daily schedule refreshes the whole medallion.
 
 # PARAMETERS CELL ********************
 
 lakehouse_abfss = "{{LAKEHOUSE_ABFSS}}"
-gtfs_zip_url = "https://ckan0.cf.opendata.inter.prod-toronto.ca/dataset/b811ead4-6eaf-4adb-8408-d389fb5a069c/resource/c920e221-7a1c-488b-8c5b-6d8cd4e85eaf/download/Complete%20GTFS.zip"
+gtfs_zip_url = "https://gtfs-static.translink.ca/gtfs/google_transit.zip"
 chain_downstream = True
 
 # METADATA ********************
@@ -103,7 +103,7 @@ print(json.dumps(summary))
 # CELL ********************
 
 if summary.get("ok") and chain_downstream:
-    for stage in ("TTCScheduleSilver", "TTCScheduleGold"):
+    for stage in ("TransLinkScheduleSilver", "TransLinkScheduleGold"):
         summary["stage"] = f"chain:{stage}"
         result = notebookutils.notebook.run(stage, 1800, {"lakehouse_abfss": lakehouse_abfss})
         summary[stage] = json.loads(result) if result else None

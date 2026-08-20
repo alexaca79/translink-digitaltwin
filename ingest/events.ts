@@ -18,7 +18,7 @@ export interface VehiclePositionEvent {
   state: VehicleState;
   stopId: string;
   currentStatus: string;
-  source: 'ttc-gtfs-rt';
+  source: 'translink-gtfs-rt';
 }
 
 export interface TripUpdateEvent {
@@ -33,7 +33,7 @@ export interface TripUpdateEvent {
   arrivalEpochSeconds: number;
   departureEpochSeconds: number;
   delaySeconds: number | null;
-  source: 'ttc-gtfs-rt';
+  source: 'translink-gtfs-rt';
 }
 
 export interface ServiceAlertEvent {
@@ -49,31 +49,13 @@ export interface ServiceAlertEvent {
   effect: string;
   activeStartEpochSeconds: number;
   activeEndEpochSeconds: number;
-  source: 'ttc-gtfs-rt';
-}
-
-export type RawFeedName = 'vehicles' | 'trips' | 'alerts';
-
-/**
- * A whole GTFS-realtime protobuf feed forwarded without decoding. The Fabric
- * Spark notebook destination decodes it and derives the typed events below.
- */
-export interface RawFeedEvent {
-  eventType: 'RawFeed';
-  eventId: string;
-  observedAt: string;
-  feed: RawFeedName;
-  encoding: 'gzip+base64';
-  rawBytes: number;
-  payload: string;
-  source: 'ttc-gtfs-rt';
+  source: 'translink-gtfs-rt';
 }
 
 export type NormalizedTransitEvent =
   | VehiclePositionEvent
   | TripUpdateEvent
-  | ServiceAlertEvent
-  | RawFeedEvent;
+  | ServiceAlertEvent;
 
 export interface PollResult {
   snapshot: TransitSnapshot;

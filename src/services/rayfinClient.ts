@@ -1,6 +1,6 @@
 import { RayfinClient } from '@microsoft/rayfin-client';
 
-import type { TtcDigitalTwinSchema } from '../../rayfin/data/schema';
+import type { TransLinkDigitalTwinSchema } from '../../rayfin/data/schema';
 
 export interface RayfinClientConfig {
   baseUrl: string;
@@ -9,16 +9,16 @@ export interface RayfinClientConfig {
   localDev: boolean;
 }
 
-let client: RayfinClient<TtcDigitalTwinSchema> | null = null;
+let client: RayfinClient<TransLinkDigitalTwinSchema> | null = null;
 let localDev = false;
 
 export function initRayfinClient(
   config: RayfinClientConfig
-): RayfinClient<TtcDigitalTwinSchema> {
+): RayfinClient<TransLinkDigitalTwinSchema> {
   if (client) {
     throw new Error('Rayfin client is already initialized.');
   }
-  client = new RayfinClient<TtcDigitalTwinSchema>({
+  client = new RayfinClient<TransLinkDigitalTwinSchema>({
     baseUrl: config.baseUrl,
     publishableKey: config.publishableKey,
     authStorage: true,
@@ -27,7 +27,7 @@ export function initRayfinClient(
   return client;
 }
 
-export function getRayfinClient(): RayfinClient<TtcDigitalTwinSchema> {
+export function getRayfinClient(): RayfinClient<TransLinkDigitalTwinSchema> {
   if (!client) {
     throw new Error(
       'Rayfin client not initialized. Call bootstrapAuth() first.'

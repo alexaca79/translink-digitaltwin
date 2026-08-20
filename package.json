@@ -1,13 +1,13 @@
 {
-  "name": "ttc-digital-twin",
+  "name": "translink-digital-twin",
   "private": true,
   "version": "0.0.0",
-  "description": "TTC real-time operations digital twin on Microsoft Fabric and Rayfin",
+  "description": "TransLink real-time operations digital twin on Microsoft Fabric and Rayfin",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/alexaca79/ttc-digitaltwin.git"
+    "url": "git+https://github.com/alexaca79/translink-digitaltwin.git"
   },
-  "homepage": "https://github.com/alexaca79/ttc-digitaltwin#readme",
+  "homepage": "https://github.com/alexaca79/translink-digitaltwin#readme",
   "type": "module",
   "template": {
     "name": "blankapp",

@@ -34,9 +34,23 @@ export interface ScheduledStopTime {
 }
 
 export interface GtfsScheduleLookup {
+  feedEndDate: string | null;
   prefetch(tripIds: Iterable<string>): Promise<void>;
   getStopTime(tripId: string, stopSequence: number, stopId: string): ScheduledStopTime | null;
   close(): void;
+}
+
+function readFeedEndDate(staticDirectory: string) {
+  const path = join(staticDirectory, 'feed_info.txt');
+  if (!existsSync(path)) return null;
+  const [feedInfo] = parse(readFileSync(path), {
+    bom: true,
+    columns: true,
+    relaxColumnCount: true,
+    skipEmptyLines: true,
+  }) as Array<Record<string, string>>;
+  const value = feedInfo?.feed_end_date?.trim() ?? '';
+  return /^\d{8}$/.test(value) ? value : null;
 }
 
 function newlineLength(path: string) {
@@ -131,7 +145,7 @@ export async function openGtfsScheduleLookup(
   let index = readIndex(indexPath, stopTimesPath);
   if (!index) {
     const tripCount = await buildGtfsScheduleIndex(stopTimesPath, indexPath);
-    console.log(`Built static schedule index for ${tripCount} TTC trips.`);
+    console.log(`Built static schedule index for ${tripCount} TransLink trips.`);
     index = readIndex(indexPath, stopTimesPath);
   }
   if (!index) throw new Error('Static GTFS schedule index could not be loaded.');
@@ -140,6 +154,7 @@ export async function openGtfsScheduleLookup(
   const cache = new Map<string, ScheduledStopTime[]>();
 
   return {
+    feedEndDate: readFeedEndDate(staticDirectory),
     async prefetch(tripIds) {
       const missing = [...new Set(tripIds)]
         .filter((tripId) => tripId && !cache.has(tripId))

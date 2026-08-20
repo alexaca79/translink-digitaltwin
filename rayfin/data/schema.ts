@@ -1,6 +1,6 @@
 import { OperatorNote } from './OperatorNote.js';
 
-export type TtcDigitalTwinSchema = {
+export type TransLinkDigitalTwinSchema = {
 	OperatorNote: OperatorNote;
 };
 

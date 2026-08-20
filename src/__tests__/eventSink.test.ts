@@ -17,7 +17,7 @@ function alertEvent(eventId: string, description: string): ServiceAlertEvent {
     effect: 'UNKNOWN_EFFECT',
     activeStartEpochSeconds: 0,
     activeEndEpochSeconds: 0,
-    source: 'ttc-gtfs-rt',
+    source: 'translink-gtfs-rt',
   };
 }
 

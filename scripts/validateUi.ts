@@ -118,7 +118,7 @@ async function validateViewport(
       `${name}: 3D map appears blank (${threeDimensionalCanvasColors} sampled colors).`
     );
     await page.screenshot({
-      path: join(outputDirectory, `ttc-digital-twin-${name}-3d.png`),
+      path: join(outputDirectory, `translink-digital-twin-${name}-3d.png`),
       fullPage: true,
     });
     await deselectFromMap(page, `${name} 3D`);
@@ -164,7 +164,7 @@ async function validateViewport(
     metrics.fleetRows === Number(metrics.vehicleCount),
     `${name}: fleet panel shows ${metrics.fleetRows} of ${metrics.vehicleCount} tracked vehicles.`
   );
-  for (const label of ['Bus', 'Streetcar', 'Subway', 'Stop', 'Delayed', 'Not reported']) {
+  for (const label of ['Bus', 'Rail', 'SeaBus', 'Stop', 'Delayed', 'Not reported']) {
     assert(metrics.legendText.includes(label), `${name}: map legend is missing '${label}'.`);
   }
   if (metrics.unknownScheduleRows === metrics.fleetRows) {
@@ -180,7 +180,7 @@ async function validateViewport(
   }
 
   await page.screenshot({
-    path: join(outputDirectory, `ttc-digital-twin-${name}.png`),
+    path: join(outputDirectory, `translink-digital-twin-${name}.png`),
     fullPage: true,
   });
   return result;

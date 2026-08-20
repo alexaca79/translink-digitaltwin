@@ -1,5 +1,5 @@
 {
-  "templateId": "ttc-digital-twin",
+  "templateId": "translink-digital-twin",
   "icon": "transit-map",
   "services": {
     "auth": true,

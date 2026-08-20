@@ -3,9 +3,8 @@ import type { Server } from 'node:http';
 import { loadConfig } from './config.js';
 import { createEventSink } from './eventSink.js';
 import { openGtfsScheduleLookup, type GtfsScheduleLookup } from './gtfsSchedule.js';
-import { collectRawFeeds } from './rawFeedForwarder.js';
 import { startSnapshotServer, type PublisherState } from './snapshotServer.js';
-import { pollTtcFeeds } from './ttcGtfsRt.js';
+import { pollTransLinkFeeds } from './translinkGtfsRt.js';
 
 const config = loadConfig();
 const sink = createEventSink(config.eventstream);
@@ -17,6 +16,7 @@ const state: PublisherState = {
   lastPublishSucceededAt: null,
   lastError: null,
   eventstreamEnabled: Boolean(config.eventstream),
+  scheduleFeedEndDate: null,
 };
 let server: Server | null = null;
 let scheduleLookup: GtfsScheduleLookup | null = null;
@@ -27,19 +27,16 @@ async function poll() {
   polling = true;
   state.lastPollStartedAt = new Date().toISOString();
   try {
-    const result = await pollTtcFeeds(config.feedBaseUrl, scheduleLookup);
+    const result = await pollTransLinkFeeds(config.feeds, scheduleLookup);
     state.snapshot = result.snapshot;
     state.lastPollSucceededAt = new Date().toISOString();
-    const events = config.rawFeedMode
-      ? await collectRawFeeds(config.feedBaseUrl)
-      : result.events;
+    const events = result.events;
     await sink.publish(events);
     state.lastPublishSucceededAt = new Date().toISOString();
     state.lastError = null;
     console.log(
       `[${state.lastPollSucceededAt}] ${result.snapshot.vehicles.length} vehicles, ` +
         `${result.snapshot.alerts.length} alerts, ${events.length} events` +
-        `${config.rawFeedMode ? ' forwarded raw for Fabric decoding' : ''}` +
         `${config.eventstream ? ' published to Fabric Eventstream' : ' normalized locally'}.`
     );
     if (config.logEvents) {
@@ -47,7 +44,7 @@ async function poll() {
     }
   } catch (error) {
     state.lastError = error instanceof Error ? error.message : String(error);
-    console.error(`[${new Date().toISOString()}] TTC poll failed: ${state.lastError}`);
+    console.error(`[${new Date().toISOString()}] TransLink poll failed: ${state.lastError}`);
     if (runOnce) throw error;
   } finally {
     polling = false;
@@ -63,9 +60,10 @@ async function shutdown() {
 
 async function main() {
   scheduleLookup = await openGtfsScheduleLookup(config.staticGtfsDirectory);
+  state.scheduleFeedEndDate = scheduleLookup?.feedEndDate ?? null;
   if (!scheduleLookup) {
     console.warn(
-      `Static TTC schedule not found in ${config.staticGtfsDirectory}; schedule adherence will be unavailable.`
+      `Static TransLink schedule not found in ${config.staticGtfsDirectory}; schedule adherence will be unavailable.`
     );
   }
   await poll();

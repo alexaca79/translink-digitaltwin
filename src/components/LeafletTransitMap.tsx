@@ -52,9 +52,9 @@ export function TransitMap({
     const vehicleMarkers = vehicleMarkersRef.current;
 
     const map = L.map(containerRef.current, {
-      center: [43.674, -79.392],
-      zoom: 11,
-      minZoom: 9,
+      center: [49.255, -123.04],
+      zoom: 10,
+      minZoom: 8,
       maxZoom: 19,
       zoomControl: false,
       attributionControl: true,
@@ -66,18 +66,18 @@ export function TransitMap({
     map.attributionControl.setPrefix(false);
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-    const routesPane = map.createPane('ttc-routes-pane');
+    const routesPane = map.createPane('translink-routes-pane');
     routesPane.style.zIndex = '410';
     routesPane.style.pointerEvents = 'none';
-    const stopsPane = map.createPane('ttc-stops-pane');
+    const stopsPane = map.createPane('translink-stops-pane');
     stopsPane.style.zIndex = '420';
-    const vehiclesPane = map.createPane('ttc-vehicles-pane');
+    const vehiclesPane = map.createPane('translink-vehicles-pane');
     vehiclesPane.style.zIndex = '430';
 
     let tileErrorCount = 0;
     const tiles = L.tileLayer(tileUrl, {
       attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors · TTC Open Data',
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors · TransLink GTFS',
       maxZoom: 19,
       updateWhenIdle: true,
       keepBuffer: 2,
@@ -86,7 +86,7 @@ export function TransitMap({
       tileErrorCount += 1;
       if (tileErrorCount === 6) {
         setMapWarning(
-          'Basemap tiles are unavailable; live TTC overlays remain active.'
+          'Basemap tiles are unavailable; live TransLink overlays remain active.'
         );
       }
     });
@@ -117,7 +117,7 @@ export function TransitMap({
         if (!visibleBounds.contains(position)) continue;
 
         const marker = L.circleMarker(position, {
-          pane: 'ttc-stops-pane',
+          pane: 'translink-stops-pane',
           radius: 3,
           color: '#242422',
           weight: 1,
@@ -173,28 +173,30 @@ export function TransitMap({
 
     routes.clearLayers();
     for (const route of visibleRoutes) {
-      if (route.path.length < 2) continue;
-      const points = route.path.map(([longitude, latitude]) =>
-        L.latLng(latitude, longitude)
-      );
-      L.polyline(points, {
-        pane: 'ttc-routes-pane',
-        color: '#ffffff',
-        weight: 7,
-        opacity: 0.82,
-        lineCap: 'round',
-        lineJoin: 'round',
-        interactive: false,
-      }).addTo(routes);
-      L.polyline(points, {
-        pane: 'ttc-routes-pane',
-        color: route.color,
-        weight: 4,
-        opacity: 0.94,
-        lineCap: 'round',
-        lineJoin: 'round',
-        interactive: false,
-      }).addTo(routes);
+      for (const path of route.paths ?? [route.path]) {
+        if (path.length < 2) continue;
+        const points = path.map(([longitude, latitude]) =>
+          L.latLng(latitude, longitude)
+        );
+        L.polyline(points, {
+          pane: 'translink-routes-pane',
+          color: '#ffffff',
+          weight: 7,
+          opacity: 0.82,
+          lineCap: 'round',
+          lineJoin: 'round',
+          interactive: false,
+        }).addTo(routes);
+        L.polyline(points, {
+          pane: 'translink-routes-pane',
+          color: route.color,
+          weight: 4,
+          opacity: 0.94,
+          lineCap: 'round',
+          lineJoin: 'round',
+          interactive: false,
+        }).addTo(routes);
+      }
     }
   }, [visibleRoutes]);
 
@@ -220,7 +222,7 @@ export function TransitMap({
         marker.setStyle(style);
       } else {
         marker = L.circleMarker([vehicle.latitude, vehicle.longitude], {
-          pane: 'ttc-vehicles-pane',
+          pane: 'translink-vehicles-pane',
           bubblingMouseEvents: false,
           ...style,
         });
@@ -266,7 +268,7 @@ export function TransitMap({
       <div
         ref={containerRef}
         className="transit-map"
-        aria-label="Live TTC operations map"
+        aria-label="Live TransLink operations map"
       />
       {mapWarning && <div className="map-warning">{mapWarning}</div>}
     </div>

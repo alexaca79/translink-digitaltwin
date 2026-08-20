@@ -42,8 +42,8 @@ describe('summarizeRouteDelays', () => {
       vehicle('29', 'bus', 0),
       vehicle('63', 'bus', 480),
       vehicle('63', 'bus', 240),
-      vehicle('504', 'streetcar', 900),
-      vehicle('504', 'streetcar', -120),
+      vehicle('30053', 'rail', 900),
+      vehicle('30053', 'rail', -120),
     ];
 
     expect(summarizeRouteDelays(vehicles, 'bus')).toEqual([
@@ -62,8 +62,8 @@ describe('summarizeRouteDelays', () => {
         trackedVehicles: 2,
       },
     ]);
-    expect(summarizeRouteDelays(vehicles, 'streetcar')[0]).toMatchObject({
-      routeId: '504',
+    expect(summarizeRouteDelays(vehicles, 'rail')[0]).toMatchObject({
+      routeId: '30053',
       averageDelayMinutes: 7.5,
       delayedVehicles: 1,
       trackedVehicles: 2,
@@ -72,7 +72,7 @@ describe('summarizeRouteDelays', () => {
 
   it('excludes other modes, unknown schedules, and routes without delays', () => {
     const vehicles = [
-      vehicle('1', 'subway', 900),
+      vehicle('30053', 'rail', 900),
       vehicle('7', 'bus', null),
       vehicle('10', 'bus', 120),
     ];
@@ -88,7 +88,7 @@ describe('summarizeLineOperations', () => {
       vehicle('29', 'bus', 0),
       vehicle('29', 'bus', -240),
       vehicle('29', 'bus', null),
-      vehicle('29', 'streetcar', 900),
+      vehicle('29', 'rail', 900),
       vehicle('63', 'bus', 900),
     ];
 

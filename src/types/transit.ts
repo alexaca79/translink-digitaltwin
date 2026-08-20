@@ -1,5 +1,5 @@
-export type TransitMode = 'bus' | 'streetcar' | 'subway';
-export type FeedSource = 'simulated' | 'ttc-gtfs-rt';
+export type TransitMode = 'bus' | 'rail' | 'ferry';
+export type FeedSource = 'simulated' | 'translink-gtfs-rt';
 export type VehicleState = 'on-time' | 'delayed' | 'early' | 'unknown';
 
 export type Coordinate = [longitude: number, latitude: number];
@@ -11,6 +11,7 @@ export interface TransitRoute {
   mode: TransitMode;
   color: string;
   path: Coordinate[];
+  paths?: Coordinate[][];
 }
 
 export interface VehicleTelemetry {

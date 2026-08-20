@@ -10,14 +10,20 @@ export interface KqlQueryConfig {
   database: string;
 }
 
+export interface RealtimeFeedConfig {
+  apiKey: string;
+  alertsUrl: string;
+  positionsUrl: string;
+  tripsUrl: string;
+}
+
 export interface PublisherConfig {
-  feedBaseUrl: string;
+  feeds: RealtimeFeedConfig;
   staticGtfsDirectory: string;
   pollIntervalMs: number;
   port: number;
   allowedOrigin: string;
   logEvents: boolean;
-  rawFeedMode: boolean;
   requestsPerMinute: number;
   exposeErrorDetail: boolean;
   eventstream: EventstreamConfig | null;
@@ -53,16 +59,28 @@ export function loadConfig(environment = process.env): PublisherConfig {
   }
 
   const kqlQueryUri = environment.FABRIC_KQL_QUERY_URI?.trim() ?? '';
-  const kqlDatabase = environment.FABRIC_KQL_DATABASE?.trim() || 'TTCOperations';
+  const kqlDatabase = environment.FABRIC_KQL_DATABASE?.trim() || 'TransLinkOperations';
+  const apiKey = environment.TRANSLINK_API_KEY?.trim() ?? '';
+
+  if (!apiKey) {
+    throw new Error('TRANSLINK_API_KEY is required for TransLink GTFS-realtime.');
+  }
 
   return {
-    feedBaseUrl: (environment.TTC_GTFS_RT_BASE_URL ?? 'https://bustime.ttc.ca/gtfsrt').replace(/\/$/, ''),
-    staticGtfsDirectory: environment.TTC_GTFS_STATIC_DIR ?? 'data/gtfs-static',
-    pollIntervalMs: positiveInteger(environment.TTC_POLL_INTERVAL_MS, 15_000),
+    feeds: {
+      apiKey,
+      alertsUrl: environment.TRANSLINK_GTFS_ALERTS_URL
+        ?? 'https://gtfsapi.translink.ca/v3/gtfsalerts',
+      positionsUrl: environment.TRANSLINK_GTFS_POSITIONS_URL
+        ?? 'https://gtfsapi.translink.ca/v3/gtfsposition',
+      tripsUrl: environment.TRANSLINK_GTFS_TRIPS_URL
+        ?? 'https://gtfsapi.translink.ca/v3/gtfsrealtime',
+    },
+    staticGtfsDirectory: environment.TRANSLINK_GTFS_STATIC_DIR ?? 'data/gtfs-static',
+    pollIntervalMs: positiveInteger(environment.TRANSLINK_POLL_INTERVAL_MS, 15_000),
     port: positiveInteger(environment.PORT, 7071),
     allowedOrigin: environment.PUBLISHER_ALLOWED_ORIGIN ?? '*',
     logEvents: environment.PUBLISHER_LOG_EVENTS === 'true',
-    rawFeedMode: environment.PUBLISHER_RAW_FEED_MODE === 'true',
     requestsPerMinute: nonNegativeInteger(environment.PUBLISHER_RATE_LIMIT_PER_MINUTE, 60),
     exposeErrorDetail: environment.PUBLISHER_EXPOSE_ERROR_DETAIL === 'true',
     eventstream: eventstreamConfigured ? { brokers, topic, username, password } : null,

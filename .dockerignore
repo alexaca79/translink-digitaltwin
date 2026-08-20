@@ -11,3 +11,4 @@
 !data/gtfs-static/
 !data/gtfs-static/stop_times.txt
 !data/gtfs-static/schedule-offsets.json
+!data/gtfs-static/feed_info.txt
