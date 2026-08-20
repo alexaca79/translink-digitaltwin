@@ -54,14 +54,15 @@
 .alter table VehiclePositions policy streamingingestion enable
 .alter table TripUpdates policy streamingingestion enable
 .alter table ServiceAlerts policy streamingingestion enable
-.create-or-alter function with (folder='TTC Digital Twin', docstring='Latest observation for every active TTC vehicle') CurrentFleet() {
+.create-or-alter function with (folder='TransLink Digital Twin', docstring='Latest observation for every active TransLink vehicle') CurrentFleet() {
     VehiclePositions
     | where ObservedAt > ago(10m)
     | summarize arg_max(ObservedAt, *) by VehicleId
 }
-.create-or-alter function with (folder='TTC Digital Twin', docstring='Route schedule adherence over the selected time window') RoutePerformance(Lookback:timespan = 30m) {
+.create-or-alter function with (folder='TransLink Digital Twin', docstring='Latest vehicle schedule adherence within the selected time window') RoutePerformance(Lookback:timespan = 30m) {
     VehiclePositions
     | where ObservedAt > ago(Lookback)
+    | summarize arg_max(ObservedAt, *) by VehicleId
     | summarize
         Vehicles=dcount(VehicleId),
                 ScheduleReported=countif(isnotnull(ScheduleDeviationSeconds)),
@@ -81,8 +82,9 @@
         | project RouteId, Mode, Vehicles, ScheduleReported, OnTimeVehicles, OnTimePercent, Delayed, P95DelaySeconds
     | order by Delayed desc
 }
-.create-or-alter function with (folder='TTC Digital Twin', docstring='Currently active TTC service alerts') ActiveAlerts() {
+.create-or-alter function with (folder='TransLink Digital Twin', docstring='Currently active TransLink service alerts') ActiveAlerts() {
     ServiceAlerts
     | summarize arg_max(ObservedAt, *) by AlertId
+    | where ActiveStartEpochSeconds == 0 or unixtime_seconds_todatetime(ActiveStartEpochSeconds) <= now()
     | where ActiveEndEpochSeconds == 0 or unixtime_seconds_todatetime(ActiveEndEpochSeconds) > now()
 }

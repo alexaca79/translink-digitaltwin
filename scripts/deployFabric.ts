@@ -80,16 +80,6 @@ function textPart(path: string, definitionPath: string, variables: Record<string
   return part(definitionPath, content);
 }
 
-function notebookDefinition() {
-  return {
-    format: 'fabricGitSource',
-    parts: [
-      textPart('notebook/notebook-content.py', 'notebook-content.py'),
-      textPart('notebook/.platform', '.platform'),
-    ],
-  };
-}
-
 function nativeIngestNotebookDefinition(variables: Record<string, string>) {
   return {
     format: 'fabricGitSource',
@@ -102,9 +92,9 @@ function nativeIngestNotebookDefinition(variables: Record<string, string>) {
 
 /** Static GTFS medallion layers, refreshed daily into the Lakehouse. */
 const MEDALLION_NOTEBOOKS = [
-  { folder: 'notebook-bronze', name: 'TTCScheduleBronze', description: 'Lands the raw TTC static GTFS archive.' },
-  { folder: 'notebook-silver', name: 'TTCScheduleSilver', description: 'Types and cleans the static GTFS stop times.' },
-  { folder: 'notebook-gold', name: 'TTCScheduleGold', description: 'Schedule lookup used for real-time adherence.' },
+  { folder: 'notebook-bronze', name: 'TransLinkScheduleBronze', description: 'Lands the raw TransLink static GTFS archive.' },
+  { folder: 'notebook-silver', name: 'TransLinkScheduleSilver', description: 'Types and cleans the static GTFS stop times.' },
+  { folder: 'notebook-gold', name: 'TransLinkScheduleGold', description: 'Schedule lookup used for real-time adherence.' },
 ] as const;
 
 function medallionNotebookDefinition(folder: string, variables: Record<string, string>) {
@@ -194,7 +184,7 @@ async function applyKqlSchema(token: string, queryServiceUri: string) {
     kqlToken,
     'POST',
     `${queryServiceUri.replace(/\/$/, '')}/v1/rest/mgmt`,
-    { db: 'TTCOperations', csl: schema }
+    { db: 'TransLinkOperations', csl: schema }
   );
   void token;
 }
@@ -208,9 +198,8 @@ async function main() {
       NOTEBOOK_ID: dummyGuid,
     };
     const plan = {
-      eventhouse: 'TTCEventhouse',
-      kqlDatabase: 'TTCOperations',
-      notebook: notebookDefinition(),
+      eventhouse: 'TransLinkEventhouse',
+      kqlDatabase: 'TransLinkOperations',
       nativeIngestNotebook: nativeIngestNotebookDefinition({
         KQL_CLUSTER_URI: 'https://example.kusto.fabric.microsoft.com',
         LAKEHOUSE_ABFSS: 'abfss://workspace@onelake.dfs.fabric.microsoft.com/lakehouse',
@@ -224,7 +213,6 @@ async function main() {
     };
     console.log(
       `Fabric plan valid: ${plan.eventstream.parts.length} Eventstream parts, ` +
-        `${plan.notebook.parts.length} decoder notebook parts, ` +
         `${plan.nativeIngestNotebook.parts.length} native ingest notebook parts, and ` +
         `${plan.medallionNotebooks.length} medallion notebooks ` +
         `routed to ${plan.kqlDatabase}.`
@@ -247,10 +235,10 @@ async function main() {
     token,
     workspaceId,
     'lakehouses',
-    'TTCSchedule',
+    'TransLinkSchedule',
     {
-      displayName: 'TTCSchedule',
-      description: 'Static TTC GTFS reference data in bronze, silver, and gold layers.',
+      displayName: 'TransLinkSchedule',
+      description: 'Static TransLink GTFS reference data in bronze, silver, and gold layers.',
     }
   );
 
@@ -258,10 +246,10 @@ async function main() {
     token,
     workspaceId,
     'eventhouses',
-    'TTCEventhouse',
+    'TransLinkEventhouse',
     {
-      displayName: 'TTCEventhouse',
-      description: 'Real-time TTC telemetry and service analytics.',
+      displayName: 'TransLinkEventhouse',
+      description: 'Real-time TransLink telemetry and service analytics.',
       creationPayload: { minimumConsumptionUnits: 0 },
     }
   );
@@ -269,10 +257,10 @@ async function main() {
     token,
     workspaceId,
     'kqlDatabases',
-    'TTCOperations',
+    'TransLinkOperations',
     {
-      displayName: 'TTCOperations',
-      description: 'Vehicle positions, trip updates, and alerts from TTC GTFS-realtime.',
+      displayName: 'TransLinkOperations',
+      description: 'Vehicle positions, trip updates, and alerts from TransLink GTFS-realtime.',
       creationPayload: {
         databaseType: 'ReadWrite',
         parentEventhouseItemId: eventhouse.id,
@@ -287,21 +275,6 @@ async function main() {
   if (!queryServiceUri) throw new Error('KQL database did not expose a query service URI.');
   await applyKqlSchema(token, queryServiceUri);
 
-  const { item: notebook, created: notebookCreated } = await ensureFabricItem(
-    token,
-    workspaceId,
-    'notebooks',
-    'TTCFeedDecoder',
-    {
-      displayName: 'TTCFeedDecoder',
-      description: 'Decodes raw TTC GTFS-realtime protobuf into TTCOperations tables.',
-      definition: notebookDefinition(),
-    }
-  );
-  if (!notebookCreated) {
-    await updateFabricDefinition(token, workspaceId, 'notebooks', notebook.id, notebookDefinition());
-  }
-
   const lakehouseAbfss = `abfss://${workspaceId}@onelake.dfs.fabric.microsoft.com/${lakehouse.id}`;
   const notebookVariables = {
     KQL_CLUSTER_URI: queryServiceUri,
@@ -312,10 +285,10 @@ async function main() {
     token,
     workspaceId,
     'notebooks',
-    'TTCNativeIngest',
+    'TransLinkNativeIngest',
     {
-      displayName: 'TTCNativeIngest',
-      description: 'Fetches and decodes TTC GTFS-realtime directly into TTCOperations.',
+      displayName: 'TransLinkNativeIngest',
+      description: 'Fetches and decodes TransLink GTFS-realtime directly into TransLinkOperations.',
       definition: nativeIngestNotebookDefinition(notebookVariables),
     }
   );
@@ -351,16 +324,15 @@ async function main() {
   const variables = {
     WORKSPACE_ID: workspaceId,
     KQL_DATABASE_ID: kqlDatabase.id,
-    NOTEBOOK_ID: notebook.id,
   };
   const { item: eventstream, created: eventstreamCreated } = await ensureFabricItem(
     token,
     workspaceId,
     'eventstreams',
-    'TTCTelemetry',
+    'TransLinkTelemetry',
     {
-      displayName: 'TTCTelemetry',
-      description: 'TTC GTFS-realtime Custom Endpoint routed to the TTCOperations KQL database.',
+      displayName: 'TransLinkTelemetry',
+      description: 'TransLink GTFS-realtime Custom Endpoint routed to the TransLinkOperations KQL database.',
       definition: eventstreamDefinition(variables),
     }
   );
@@ -391,11 +363,10 @@ async function main() {
     workspaceId,
     eventhouseId: eventhouse.id,
     kqlDatabaseId: kqlDatabase.id,
-    kqlDatabaseName: 'TTCOperations',
+    kqlDatabaseName: 'TransLinkOperations',
     queryServiceUri,
     eventstreamId: eventstream.id,
-    eventstreamSourceName: 'TTCPublisher',
-    notebookId: notebook.id,
+    eventstreamSourceName: 'TransLinkPublisher',
     nativeIngestNotebookId: nativeIngestNotebook.id,
     medallionNotebookIds,
     lakehouseId: lakehouse.id,

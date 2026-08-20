@@ -71,7 +71,7 @@ class KafkaEventstreamSink implements EventSink {
 
   constructor(private readonly config: EventstreamConfig) {
     const kafka = new Kafka({
-      clientId: 'ttc-digital-twin-publisher',
+      clientId: 'translink-digital-twin-publisher',
       brokers: config.brokers,
       ssl: true,
       sasl: {

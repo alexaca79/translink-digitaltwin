@@ -1,6 +1,6 @@
 import type { TransitMode, VehicleTelemetry } from '@/types/transit';
 
-export type DelayComparisonMode = Extract<TransitMode, 'bus' | 'streetcar'>;
+export type DelayComparisonMode = Extract<TransitMode, 'bus' | 'rail'>;
 
 export interface RouteDelaySummary {
   routeId: string;

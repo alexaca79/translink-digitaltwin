@@ -19,10 +19,15 @@ afterEach(() => {
 
 describe('static GTFS schedule lookup', () => {
   it('indexes trip ranges and resolves stop times by sequence or unique stop ID', async () => {
-    const directory = mkdtempSync(join(tmpdir(), 'ttc-schedule-'));
+    const directory = mkdtempSync(join(tmpdir(), 'translink-schedule-'));
     temporaryDirectories.push(directory);
     const stopTimesPath = join(directory, 'stop_times.txt');
     const indexPath = join(directory, 'schedule-offsets.json');
+    writeFileSync(
+      join(directory, 'feed_info.txt'),
+      'feed_publisher_name,feed_end_date\nTransLink,20991231\n',
+      'utf8'
+    );
     writeFileSync(
       stopTimesPath,
       [
@@ -38,6 +43,7 @@ describe('static GTFS schedule lookup', () => {
     await expect(buildGtfsScheduleIndex(stopTimesPath, indexPath)).resolves.toBe(2);
     const lookup = await openGtfsScheduleLookup(directory);
     expect(lookup).not.toBeNull();
+    expect(lookup!.feedEndDate).toBe('20991231');
     await lookup!.prefetch(['trip-a', 'trip-b']);
 
     expect(lookup!.getStopTime('trip-a', 2, 'stop-2')).toMatchObject({

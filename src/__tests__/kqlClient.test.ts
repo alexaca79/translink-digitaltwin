@@ -1,6 +1,23 @@
 import { describe, expect, it } from 'vitest';
 
-import { mapAlertRows, mapFleetRows } from '../../ingest/kqlClient.js';
+import {
+  managedIdentityTokenUrl,
+  mapAlertRows,
+  mapFleetRows,
+} from '../../ingest/kqlClient.js';
+
+describe('Eventhouse authentication', () => {
+  it('selects the configured user-assigned identity', () => {
+    const url = managedIdentityTokenUrl(
+      'http://localhost:42356/msi/token',
+      '00000000-0000-0000-0000-000000000123'
+    );
+
+    expect(url.searchParams.get('resource')).toBe('https://kusto.kusto.windows.net');
+    expect(url.searchParams.get('api-version')).toBe('2019-08-01');
+    expect(url.searchParams.get('client_id')).toBe('00000000-0000-0000-0000-000000000123');
+  });
+});
 
 describe('Eventhouse row projection', () => {
   it('maps CurrentFleet() rows onto vehicle telemetry', () => {
@@ -8,12 +25,12 @@ describe('Eventhouse row projection', () => {
       {
         ObservedAt: '2026-08-17T14:03:00Z',
         VehicleId: '1234',
-        VehicleLabel: 'TTC 1234',
+        VehicleLabel: 'TransLink 1234',
         TripId: 'trip-9',
-        RouteId: '504',
-        Mode: 'streetcar',
-        Latitude: 43.6426,
-        Longitude: -79.3871,
+        RouteId: '30053',
+        Mode: 'rail',
+        Latitude: 49.2857,
+        Longitude: -123.1119,
         Bearing: 180,
         SpeedKph: 22.5,
         ScheduleDeviationSeconds: 240,
@@ -24,12 +41,12 @@ describe('Eventhouse row projection', () => {
 
     expect(vehicle).toEqual({
       id: '1234',
-      routeId: '504',
+      routeId: '30053',
       tripId: 'trip-9',
-      label: 'TTC 1234',
-      mode: 'streetcar',
-      latitude: 43.6426,
-      longitude: -79.3871,
+      label: 'TransLink 1234',
+      mode: 'rail',
+      latitude: 49.2857,
+      longitude: -123.1119,
       bearing: 180,
       speedKph: 22.5,
       scheduleDeviationSeconds: 240,
@@ -45,7 +62,7 @@ describe('Eventhouse row projection', () => {
         ObservedAt: '2026-08-17T14:03:00Z',
         VehicleId: '9',
         RouteId: '29',
-        Mode: 'ferry',
+        Mode: 'hovercraft',
         ScheduleDeviationSeconds: null,
         Occupancy: 'packed',
         State: 'teleporting',
@@ -82,6 +99,6 @@ describe('Eventhouse row projection', () => {
     expect(alerts[0].routeIds).toEqual(['1']);
     expect(alerts[1].routeIds).toEqual(['504', '505']);
     expect(alerts[1].severity).toBe('warning');
-    expect(alerts[1].title).toBe('TTC service alert');
+    expect(alerts[1].title).toBe('TransLink service alert');
   });
 });

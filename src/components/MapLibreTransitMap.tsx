@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { FeatureCollection, LineString, Point } from 'geojson';
+import type { FeatureCollection, MultiLineString, Point } from 'geojson';
 import {
   Map as MapLibreMap,
   NavigationControl,
@@ -54,7 +54,7 @@ const vectorTileJsonUrl =
 setWorkerUrl(mapLibreWorkerUrl);
 
 function emptyFeatureCollection<
-  Geometry extends LineString | Point,
+  Geometry extends MultiLineString | Point,
   Properties,
 >(): FeatureCollection<Geometry, Properties> {
   return { type: 'FeatureCollection', features: [] };
@@ -78,15 +78,15 @@ function createMapStyle(): StyleSpecification {
           '<a href="https://openfreemap.org">OpenFreeMap</a> · ' +
           '<a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       },
-      'ttc-routes': {
+      'translink-routes': {
         type: 'geojson',
-        data: emptyFeatureCollection<LineString, RouteProperties>(),
+        data: emptyFeatureCollection<MultiLineString, RouteProperties>(),
       },
-      'ttc-stops': {
+      'translink-stops': {
         type: 'geojson',
         data: emptyFeatureCollection<Point, StopProperties>(),
       },
-      'ttc-vehicles': {
+      'translink-vehicles': {
         type: 'geojson',
         data: emptyFeatureCollection<Point, VehicleProperties>(),
       },
@@ -196,7 +196,7 @@ function createMapStyle(): StyleSpecification {
       {
         id: 'route-casing',
         type: 'line',
-        source: 'ttc-routes',
+        source: 'translink-routes',
         layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: {
           'line-color': '#ffffff',
@@ -207,7 +207,7 @@ function createMapStyle(): StyleSpecification {
       {
         id: 'routes',
         type: 'line',
-        source: 'ttc-routes',
+        source: 'translink-routes',
         layout: { 'line-cap': 'round', 'line-join': 'round' },
         paint: {
           'line-color': ['get', 'color'],
@@ -218,7 +218,7 @@ function createMapStyle(): StyleSpecification {
       {
         id: 'stops',
         type: 'circle',
-        source: 'ttc-stops',
+        source: 'translink-stops',
         minzoom: 13,
         paint: {
           'circle-color': '#fbfbf9',
@@ -230,7 +230,7 @@ function createMapStyle(): StyleSpecification {
       {
         id: 'vehicles',
         type: 'circle',
-        source: 'ttc-vehicles',
+        source: 'translink-vehicles',
         paint: {
           'circle-color': ['get', 'color'],
           'circle-pitch-alignment': 'viewport',
@@ -255,14 +255,17 @@ function createMapStyle(): StyleSpecification {
 
 function routeData(
   routes: TransitRoute[]
-): FeatureCollection<LineString, RouteProperties> {
+): FeatureCollection<MultiLineString, RouteProperties> {
   return {
     type: 'FeatureCollection',
     features: routes
-      .filter((route) => route.path.length >= 2)
+      .filter((route) => (route.paths ?? [route.path]).some((path) => path.length >= 2))
       .map((route) => ({
         type: 'Feature',
-        geometry: { type: 'LineString', coordinates: route.path },
+        geometry: {
+          type: 'MultiLineString',
+          coordinates: (route.paths ?? [route.path]).filter((path) => path.length >= 2),
+        },
         properties: { color: route.color, routeId: route.id },
       })),
   };
@@ -339,8 +342,8 @@ export function MapLibreTransitMap({
     try {
       map = new MapLibreMap({
         container: containerRef.current,
-        center: [-79.392, 43.674],
-        zoom: 13.4,
+        center: [-123.04, 49.255],
+        zoom: 11.8,
         pitch: 58,
         bearing: -17,
         minZoom: 9,
@@ -348,7 +351,7 @@ export function MapLibreTransitMap({
         maxPitch: 72,
         attributionControl: {
           compact: true,
-          customAttribution: 'TTC Open Data',
+          customAttribution: 'TransLink GTFS',
         },
         canvasContextAttributes: {
           antialias: true,
@@ -374,7 +377,7 @@ export function MapLibreTransitMap({
     };
     const handleError = (event: MapLibreErrorEvent) => {
       setMapWarning(
-        `3D basemap issue: ${event.error.message}. TTC overlays remain active.`
+        `3D basemap issue: ${event.error.message}. TransLink overlays remain active.`
       );
     };
     const handleVehicleClick = (event: MapLayerMouseEvent) => {
@@ -424,7 +427,7 @@ export function MapLibreTransitMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!mapReady || !map) return;
-    void (map.getSource('ttc-routes') as GeoJSONSource).setData(
+    void (map.getSource('translink-routes') as GeoJSONSource).setData(
       routeData(visibleRoutes)
     );
   }, [mapReady, visibleRoutes]);
@@ -432,13 +435,13 @@ export function MapLibreTransitMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!mapReady || !map) return;
-    void (map.getSource('ttc-stops') as GeoJSONSource).setData(stopData(stops));
+    void (map.getSource('translink-stops') as GeoJSONSource).setData(stopData(stops));
   }, [mapReady, stops]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!mapReady || !map) return;
-    void (map.getSource('ttc-vehicles') as GeoJSONSource).setData(
+    void (map.getSource('translink-vehicles') as GeoJSONSource).setData(
       vehicleData(vehicles, selectedVehicleId)
     );
   }, [mapReady, selectedVehicleId, vehicles]);
@@ -466,7 +469,7 @@ export function MapLibreTransitMap({
       <div
         ref={containerRef}
         className="transit-map"
-        aria-label="Live TTC three-dimensional operations map"
+        aria-label="Live TransLink three-dimensional operations map"
       />
       {!mapReady && <div className="map-loading">Loading 3D scene...</div>}
       {mapWarning && <div className="map-warning">{mapWarning}</div>}

@@ -10,6 +10,7 @@ export interface PublisherState {
   lastPublishSucceededAt: string | null;
   lastError: string | null;
   eventstreamEnabled: boolean;
+  scheduleFeedEndDate: string | null;
 }
 
 export interface SnapshotServerOptions {
@@ -24,6 +25,21 @@ export interface SnapshotServerOptions {
 const ALLOWED_LOOKBACKS = new Set(['15m', '30m', '1h', '3h', '6h', '12h', '24h']);
 
 const WINDOW_MS = 60_000;
+
+function vancouverServiceDate(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Vancouver',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}${value.month}${value.day}`;
+}
+
+function scheduleIsCurrent(feedEndDate: string | null) {
+  return Boolean(feedEndDate && feedEndDate >= vancouverServiceDate());
+}
 
 function sendJson(response: import('node:http').ServerResponse, status: number, body: unknown) {
   response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -144,7 +160,7 @@ export function startSnapshotServer(
     if (request.method === 'GET' && url.pathname === '/api/snapshot') {
       const state = getState();
       if (!state.snapshot) {
-        sendJson(response, 503, { error: 'No TTC snapshot has been collected yet.' });
+        sendJson(response, 503, { error: 'No TransLink snapshot has been collected yet.' });
         return;
       }
       sendJson(response, 200, state.snapshot);
@@ -153,13 +169,17 @@ export function startSnapshotServer(
 
     if (request.method === 'GET' && url.pathname === '/api/health') {
       const state = getState();
-      sendJson(response, state.lastError ? 503 : 200, {
-        status: state.lastError ? 'degraded' : state.snapshot ? 'ready' : 'starting',
+      const scheduleCurrent = scheduleIsCurrent(state.scheduleFeedEndDate);
+      const degraded = Boolean(state.lastError) || !scheduleCurrent;
+      sendJson(response, degraded ? 503 : 200, {
+        status: degraded ? 'degraded' : state.snapshot ? 'ready' : 'starting',
         lastPollStartedAt: state.lastPollStartedAt,
         lastPollSucceededAt: state.lastPollSucceededAt,
         lastPublishSucceededAt: state.lastPublishSucceededAt,
         eventstreamEnabled: state.eventstreamEnabled,
         kqlConfigured: Boolean(kql),
+        scheduleFeedEndDate: state.scheduleFeedEndDate,
+        scheduleCurrent,
         // Dependency text can name internal hosts, so it stays opt-in.
         failing: Boolean(state.lastError),
         ...(settings.exposeErrorDetail ? { lastError: state.lastError } : {}),
@@ -176,18 +196,22 @@ export function startSnapshotServer(
 
     if (request.method === 'GET' && url.pathname === '/api/ready') {
       const state = getState();
+      const scheduleCurrent = scheduleIsCurrent(state.scheduleFeedEndDate);
       const ready = Boolean(
         state.snapshot &&
         state.lastPollSucceededAt &&
         !state.lastError &&
         state.eventstreamEnabled &&
         state.lastPublishSucceededAt
+        && scheduleCurrent
       );
       sendJson(response, ready ? 200 : 503, {
         status: ready ? 'ready' : 'not-ready',
         lastPollSucceededAt: state.lastPollSucceededAt,
         lastPublishSucceededAt: state.lastPublishSucceededAt,
         eventstreamEnabled: state.eventstreamEnabled,
+        scheduleFeedEndDate: state.scheduleFeedEndDate,
+        scheduleCurrent,
       });
       return;
     }

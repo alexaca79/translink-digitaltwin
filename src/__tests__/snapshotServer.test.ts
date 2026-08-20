@@ -9,7 +9,7 @@ import {
 import type { TransitSnapshot } from '@/types/transit';
 
 const snapshot: TransitSnapshot = {
-  source: 'ttc-gtfs-rt',
+  source: 'translink-gtfs-rt',
   observedAt: '2026-08-15T12:00:00.000Z',
   vehicles: [],
   alerts: [],
@@ -25,6 +25,7 @@ function publisherState(
     lastPublishSucceededAt: null,
     lastError: null,
     eventstreamEnabled: true,
+    scheduleFeedEndDate: '99991231',
     ...overrides,
   };
 }
@@ -89,6 +90,23 @@ describe('publisher readiness', () => {
     });
   });
 
+  it('rejects production readiness when the static schedule has expired', async () => {
+    const response = await requestReady(
+      publisherState({
+        snapshot,
+        lastPollSucceededAt: snapshot.observedAt,
+        lastPublishSucceededAt: snapshot.observedAt,
+        scheduleFeedEndDate: '20000101',
+      })
+    );
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      status: 'not-ready',
+      scheduleCurrent: false,
+    });
+  });
+
   it('reports the Eventhouse query endpoint as unavailable when it is not configured', async () => {
     const state = publisherState({ snapshot });
     server = await startSnapshotServer(0, 'https://example.test', () => state);
@@ -105,7 +123,7 @@ describe('publisher readiness', () => {
     const state = publisherState({ snapshot });
     server = await startSnapshotServer(0, 'https://example.test', () => state, {
       queryUri: 'https://kusto.invalid',
-      database: 'TTCOperations',
+      database: 'TransLinkOperations',
     });
     const address = server.address() as AddressInfo;
     const response = await fetch(

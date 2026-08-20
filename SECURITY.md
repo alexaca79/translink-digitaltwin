@@ -1,5 +1,8 @@
 ---
 title: Security Policy
+description: Security reporting and data-handling boundaries for the TransLink Digital Twin
+ms.date: 2026-08-20
+ms.topic: reference
 ---
 
 Microsoft takes the security of our software products and services seriously,
@@ -15,10 +18,15 @@ the latest guidance for Microsoft repositories at
 
 ## Scope notes for this repository
 
-This project reads public City of Toronto open data. It stores no personal
-data, no fare data, and no employee data.
+This project reads TransLink GTFS data under TransLink's developer terms. It
+stores no personal data, fare data, or employee data.
 
-The TTC publisher exposes read-only HTTP endpoints. Before running it on a
+The publisher requires a TransLink Open API key for realtime feeds. Keep that
+key in the publisher process environment or an ACA secret. Never expose it
+through a `VITE_*` variable, browser bundle, log message, health response, or
+committed file.
+
+The TransLink publisher exposes read-only HTTP endpoints. Before running it on a
 public address, understand these boundaries:
 
 * The endpoints are unauthenticated. `PUBLISHER_ALLOWED_ORIGIN` restricts
@@ -31,5 +39,5 @@ public address, understand these boundaries:
 * `/api/route-performance` accepts an allow-listed lookback only, so caller
   input never reaches the query text.
 
-Add authentication, a gateway, and monitoring before exposing internal TTC,
-employee, incident, or passenger data through this API.
+Add authentication, a gateway, and monitoring before exposing internal
+TransLink, employee, incident, or passenger data through this API.

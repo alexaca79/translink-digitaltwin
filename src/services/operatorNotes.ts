@@ -20,7 +20,7 @@ export interface NewOperatorNote {
   vehicleId?: string;
 }
 
-const STORAGE_KEY = 'ttc-digital-twin.operator-notes';
+const STORAGE_KEY = 'translink-digital-twin.operator-notes';
 const demoMode = import.meta.env.VITE_DEMO_MODE === 'true';
 
 function readDemoNotes(): OperatorNoteRecord[] {

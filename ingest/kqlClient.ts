@@ -31,12 +31,20 @@ interface CachedToken {
 
 let cachedToken: CachedToken | null = null;
 
+export function managedIdentityTokenUrl(endpoint: string, clientId?: string) {
+  const url = new URL(endpoint);
+  url.searchParams.set('resource', KUSTO_RESOURCE);
+  url.searchParams.set('api-version', '2019-08-01');
+  if (clientId) url.searchParams.set('client_id', clientId);
+  return url;
+}
+
 async function requestManagedIdentityToken(): Promise<CachedToken | null> {
   const endpoint = process.env.IDENTITY_ENDPOINT;
   const header = process.env.IDENTITY_HEADER;
   if (!endpoint || !header) return null;
 
-  const url = `${endpoint}?resource=${encodeURIComponent(KUSTO_RESOURCE)}&api-version=2019-08-01`;
+  const url = managedIdentityTokenUrl(endpoint, process.env.AZURE_CLIENT_ID);
   const response = await fetch(url, { headers: { 'X-IDENTITY-HEADER': header } });
   if (!response.ok) {
     throw new Error(`Managed identity token request failed (${response.status}).`);
@@ -133,7 +141,7 @@ function nullableNumeric(value: unknown): number | null {
 }
 
 function transitMode(value: unknown): TransitMode {
-  return value === 'streetcar' || value === 'subway' ? value : 'bus';
+  return value === 'rail' || value === 'ferry' ? value : 'bus';
 }
 
 function vehicleState(value: unknown): VehicleState {
@@ -190,7 +198,7 @@ export function mapAlertRows(rows: Array<Record<string, unknown>>): ServiceAlert
   return rows.map((row) => ({
     id: text(row.AlertId),
     severity: severity(row.Severity),
-    title: text(row.Title, 'TTC service alert'),
+    title: text(row.Title, 'TransLink service alert'),
     description: text(row.Description),
     routeIds: routeIds(row.RouteIds),
     updatedAt: isoTimestamp(row.ObservedAt, observedFallback),
@@ -216,7 +224,7 @@ export async function fetchLiveSnapshot(config: KqlConfig): Promise<TransitSnaps
     .at(-1);
 
   return {
-    source: 'ttc-gtfs-rt',
+    source: 'translink-gtfs-rt',
     observedAt: newestObservation ?? new Date().toISOString(),
     vehicles,
     alerts: mapAlertRows(alertRows),
